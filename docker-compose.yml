@@ -6,6 +6,7 @@ services:
       - "8080:80"
     volumes:
       - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./docs-aggregator:/usr/share/nginx/html/docs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
