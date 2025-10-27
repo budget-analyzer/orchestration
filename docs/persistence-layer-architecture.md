@@ -50,15 +50,6 @@ This rule can be enforced using **Checkstyle**:
 
 Adding this to your `checkstyle.xml` configuration will fail the build if any Hibernate imports are detected.
 
-**Alternative: ArchUnit** for architectural testing:
-```java
-@Test
-void shouldNotImportHibernate() {
-    noClasses()
-        .should().dependOnClassesThat().resideInAPackage("org.hibernate..")
-        .check(new ClassFileImporter().importPackages("com.yourpackage.."));
-}
-```
 
 ## JPA Entity Design Guidelines
 
