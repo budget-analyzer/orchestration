@@ -2,13 +2,18 @@
 
 # validate-repos.sh - Validate all Budget Analyzer repositories are on main and up to date
 #
-# Usage: ./scripts/validate-repos.sh
+# Usage: ./scripts/validate-repos.sh [--fix]
 #
 # This script will:
 # 1. Check that all repositories exist and are git repositories
 # 2. Verify each repository is on the main branch
 # 3. Check for uncommitted changes
 # 4. Verify local branch is up to date with remote
+#
+# Options:
+#   --fix    Attempt to fix issues automatically where possible:
+#            - Switch to main branch if not on it (fails if uncommitted changes)
+#            - Pull latest changes if behind remote
 #
 # Exit codes:
 #   0 - All repositories are valid and up to date
@@ -19,6 +24,13 @@ set -e  # Exit on error
 # Get script directory and source shared configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/repo-config.sh"
+
+# Parse command line arguments
+FIX_MODE=0
+if [ "$1" = "--fix" ]; then
+    FIX_MODE=1
+    print_info "Running in fix mode - will attempt to fix issues automatically"
+fi
 
 print_info "Validating repositories..."
 VALIDATION_FAILED=0
@@ -57,9 +69,21 @@ for REPO in "${REPOS[@]}"; do
     # Check if on main branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [ "$CURRENT_BRANCH" != "main" ]; then
-        print_error "Not on main branch in $REPO (currently on: $CURRENT_BRANCH)"
-        VALIDATION_FAILED=1
-        continue
+        if [ $FIX_MODE -eq 1 ]; then
+            print_warning "Not on main branch in $REPO (currently on: $CURRENT_BRANCH)"
+            print_info "Attempting to switch to main branch..."
+            if git checkout main; then
+                print_success "✓ Switched to main branch in $REPO"
+            else
+                print_error "Failed to switch to main branch in $REPO"
+                VALIDATION_FAILED=1
+                continue
+            fi
+        else
+            print_error "Not on main branch in $REPO (currently on: $CURRENT_BRANCH)"
+            VALIDATION_FAILED=1
+            continue
+        fi
     fi
 
     # Fetch latest from remote
@@ -77,9 +101,20 @@ for REPO in "${REPOS[@]}"; do
 
     if [ "$LOCAL" != "$REMOTE" ]; then
         if [ "$LOCAL" = "$BASE" ]; then
-            print_error "$REPO is behind remote. Please pull latest changes."
-            VALIDATION_FAILED=1
-            continue
+            if [ $FIX_MODE -eq 1 ]; then
+                print_warning "$REPO is behind remote. Attempting to pull latest changes..."
+                if git pull origin main --quiet; then
+                    print_success "✓ Pulled latest changes for $REPO"
+                else
+                    print_error "Failed to pull latest changes for $REPO"
+                    VALIDATION_FAILED=1
+                    continue
+                fi
+            else
+                print_error "$REPO is behind remote. Please pull latest changes."
+                VALIDATION_FAILED=1
+                continue
+            fi
         elif [ "$REMOTE" = "$BASE" ]; then
             print_error "$REPO has unpushed commits. Please push before tagging."
             VALIDATION_FAILED=1
