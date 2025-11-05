@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  claude-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USERNAME: vscode
+        USER_UID: 1002
+        USER_GID: 1002
+    
+    volumes:
+      # Mount dev directory as workspace (read/write)
+      - ../../:/workspace:cached
+      
+      # Mount claude-code-sandbox as read-only (security: Claude Code cannot modify its own config)
+      - .:/workspace/budget-analyzer/claude-code-sandbox:ro
+      
+      # Persistent storage for Claude Code credentials
+      - claude-anthropic:/home/vscode/.anthropic
+    
+    # Use host network for simplicity
+    network_mode: host
+    
+    # Keep container running
+    command: sleep infinity
+    
+    user: vscode
+
+volumes:
+  claude-anthropic:
