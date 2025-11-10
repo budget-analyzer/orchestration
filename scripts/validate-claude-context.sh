@@ -4,7 +4,14 @@
 
 set -e
 
+# Change to repository root (parent of scripts directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 echo "=== Validating CLAUDE.md Context Files ==="
+echo "Working directory: $REPO_ROOT"
+echo ""
 
 ERRORS=0
 WARNINGS=0

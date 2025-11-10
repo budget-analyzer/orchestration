@@ -2,8 +2,14 @@
 # scripts/doc-coverage-report.sh
 # Reports on documentation coverage across the Budget Analyzer project
 
+# Change to repository root (parent of scripts directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 echo "=== Documentation Coverage Report ==="
 echo "Generated: $(date)"
+echo "Working directory: $REPO_ROOT"
 echo ""
 
 # Colors for output (if terminal supports it)

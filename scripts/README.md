@@ -10,8 +10,17 @@ Validates CLAUDE.md files for broken references and documentation issues.
 
 **Usage:**
 ```bash
+# From repository root
 ./scripts/validate-claude-context.sh
+
+# Or from scripts directory
+cd scripts && ./validate-claude-context.sh
+
+# Or from anywhere with full path
+/path/to/orchestration/scripts/validate-claude-context.sh
 ```
+
+**Note:** The script automatically changes to the repository root directory, so it works correctly regardless of where you call it from.
 
 **What it checks:**
 - `@references` point to existing files (e.g., `@nginx/nginx.dev.conf`)
@@ -33,8 +42,17 @@ Reports on documentation coverage across the Budget Analyzer project.
 
 **Usage:**
 ```bash
+# From repository root
 ./scripts/doc-coverage-report.sh
+
+# Or from scripts directory
+cd scripts && ./doc-coverage-report.sh
+
+# Or from anywhere with full path
+/path/to/orchestration/scripts/doc-coverage-report.sh
 ```
+
+**Note:** The script automatically changes to the repository root directory, so it works correctly regardless of where you call it from.
 
 **What it reports:**
 - CLAUDE.md files presence and size
