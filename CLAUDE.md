@@ -2,34 +2,11 @@
 
 ## Project Overview
 
-This is an orchestration repository that manages the deployment and development environment for the Budget Analyzer application - a production-grade, microservices-based financial management system.
+This orchestration repository coordinates the deployment and development environment for the Budget Analyzer application - a production-grade, microservices-based financial management system.
 
-## Architecture
+**Purpose**: Manages cross-service concerns, local development setup, and deployment coordination. Individual service code lives in separate repositories.
 
-### Core Services
-
-1. **budget-analyzer-web** - React 19 web application
-   - Modern frontend for budget tracking and financial analysis
-   - Development server runs on port 3000
-   - Production build served as static assets
-
-2. **transaction-service** - Spring Boot microservice
-   - Core business logic for budget and transaction management
-   - Runs on port 8082
-   - RESTful API endpoints under `/transaction-service/*`
-
-3. **currency-service** - Spring Boot microservice
-   - Currency conversion and exchange rate management
-   - Runs on port 8084
-   - RESTful API endpoints under `/currency-service/*`
-
-4. **nginx-gateway** - NGINX API Gateway
-   - Unified entry point for all services (port 8080)
-   - Resource-based routing (frontend calls clean `/api/*` paths)
-   - Decouples frontend from backend service architecture
-   - Separate configurations for development and production
-
-### Architecture Principles
+## Architecture Principles
 
 - **Production Parity**: Development environment faithfully recreates production
 - **Microservices**: Independently deployable services with clear boundaries
@@ -37,21 +14,81 @@ This is an orchestration repository that manages the deployment and development 
 - **Resource-Based Routing**: Frontend remains decoupled from service topology
 - **Containerization**: Docker and Docker Compose for consistent environments
 
-## Repository Structure
+## Service Architecture
 
+**Pattern**: Microservices defined in [docker-compose.yml](docker-compose.yml)
+
+**Discovery**:
+```bash
+# List all services
+docker-compose config --services
+
+# View service details and ports
+docker-compose config
+
+# See running services
+docker-compose ps
 ```
-orchestration/
-├── claude.md                    # This file - AI assistant context
-├── README.md                    # Human-readable project documentation
-├── docker-compose.yml           # Development orchestration
-├── nginx/
-│   ├── nginx.dev.conf          # Development NGINX configuration
-│   └── README.md               # NGINX configuration documentation
-├── scripts/                     # Build, release, and development scripts
-├── docs/                        # Additional documentation
-├── kubernetes/                  # K8s manifests for production deployment
-└── .gitignore
+
+**Service Types**:
+- **Frontend services**: React-based web applications (typically port 3000 in dev)
+- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker-compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Gateway**: NGINX reverse proxy (port 8080) routes all frontend requests
+
+**Adding New Services**:
+1. Add service to [docker-compose.yml](docker-compose.yml)
+2. Add routes to [nginx/nginx.dev.conf](nginx/nginx.dev.conf) if frontend-facing
+3. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
+
+## API Gateway Pattern
+
+**Frontend calls**: All requests go through NGINX gateway (`http://localhost:8080/api/*`)
+
+**Routing Strategy**: Resource-based (not service-based)
+- Frontend is decoupled from service topology
+- Moving a resource to different service = NGINX config change only
+- No DNS resolver needed
+- Clean RESTful paths
+
+**Current Routes**: See [nginx/nginx.dev.conf](nginx/nginx.dev.conf) (source of truth)
+
+**Discovery**:
+```bash
+# List all API routes
+grep "location /api" nginx/nginx.dev.conf | grep -v "#"
+
+# Test gateway routing
+curl -v http://localhost:8080/api/v1/health
 ```
+
+**Pattern Benefits**:
+- Frontend never knows which service handles a resource
+- Services can be split/merged without frontend changes
+- API versioning handled at gateway level
+
+**See also**: [nginx/README.md](nginx/README.md)
+
+## Technology Stack
+
+**Principle**: Each service manages its own dependencies. Versions are defined in service-specific files.
+
+**Discovery**:
+```bash
+# List infrastructure versions
+docker-compose config | grep 'image:' | sort -u
+
+# Check service ports
+grep -A 3 "ports:" docker-compose.yml
+```
+
+**Stack Patterns**:
+- **Frontend**: React (see individual service package.json)
+- **Backend**: Spring Boot + Java (version managed in service-common)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Gateway**: NGINX (Alpine-based)
+
+**Note**: Docker images should be pinned to specific versions for reproducibility.
 
 ## Development Workflow
 
@@ -61,10 +98,9 @@ orchestration/
 - Node.js 18+ (for local React development)
 - Git
 
-### Starting the Development Environment
-
+### Quick Start
 ```bash
-# Start all services
+# Start all infrastructure
 docker-compose up -d
 
 # View logs
@@ -73,122 +109,6 @@ docker-compose logs -f
 # Stop all services
 docker-compose down
 ```
-
-### Service Endpoints (Development)
-
-- **NGINX Gateway**: http://localhost:8080
-- **React App**: http://localhost:3000 (direct, for hot reload)
-- **Budget Analyzer API**: http://localhost:8082
-- **Currency Service**: http://localhost:8084
-
-### Frontend Access Pattern
-
-The frontend should call the NGINX gateway at `http://localhost:8080/api/*`:
-- `/api/transactions` → routed to transaction-service
-- `/api/currencies` → routed to currency-service
-- `/api/exchange-rates` → routed to currency-service
-
-## NGINX Gateway Routing
-
-### Resource-Based Routing Strategy
-
-The gateway uses **resource-based routing** instead of service-based routing:
-
-**Benefits:**
-- Frontend is decoupled from backend service architecture
-- Moving a resource to a different service requires only an NGINX config change
-- No DNS resolver needed
-- Clean, RESTful API paths for frontend
-
-**Adding New Routes:**
-1. Add location block in `nginx/nginx.dev.conf`
-2. Point to appropriate upstream and path
-3. No frontend changes required
-
-### Development vs Production Configurations
-
-- **nginx.dev.conf**: Proxies to local services via `host.docker.internal`
-- **nginx.prod.conf** (future): Will use Docker service names or production endpoints
-
-## Docker Compose Configuration
-
-### Development (`docker-compose.yml`)
-- Uses `nginx/nginx.dev.conf`
-- Configured for hot-reload and local development
-- Services communicate via `host.docker.internal`
-- NGINX runs in container, apps run on host for easier debugging
-
-### Production (future `docker-compose.prod.yml`)
-- Will use `nginx/nginx.prod.conf`
-- All services containerized
-- Optimized for performance and security
-- Services communicate via Docker network
-
-## Build and Release Scripts
-
-### Build Scripts (`scripts/build/`)
-- Build individual services
-- Create Docker images
-- Run tests and quality checks
-
-### Release Scripts (`scripts/release/`)
-- Version management
-- Tag creation
-- Deployment automation
-- Rollback procedures
-
-### Development Scripts (`scripts/dev/`)
-- Environment setup
-- Database migrations
-- Test data seeding
-- Log aggregation
-
-## Technology Stack
-
-### Frontend
-- React 19
-- Modern JavaScript/TypeScript
-- Webpack/Vite for bundling
-- Hot Module Replacement for development
-
-### Backend
-- Spring Boot 3.x
-- Java 17+
-- RESTful APIs
-- Microservices architecture
-
-### Infrastructure
-- Docker for containerization
-- Docker Compose for orchestration
-- NGINX for API gateway and reverse proxy
-- Kubernetes for production deployment
-- PostgreSQL/MySQL for databases (if applicable)
-
-## Best Practices
-
-1. **Environment Parity**: Keep dev and prod configurations as similar as possible
-2. **Configuration Management**: Use environment variables for configuration
-3. **Health Checks**: All services expose `/health` endpoints
-4. **Logging**: Centralized logging strategy across all services
-5. **Version Control**: Tag releases and maintain changelog
-6. **Documentation**: Keep this file updated as architecture evolves
-7. **Service Independence**: Each microservice should be independently deployable
-8. **API Versioning**: Version APIs to support backward compatibility
-
-## Common Tasks
-
-### Adding a New Microservice
-1. Create service in separate repository
-2. Add upstream definition in NGINX config (`nginx/nginx.dev.conf`)
-3. Add location blocks for service routes
-4. Update `docker-compose.yml` if running service locally
-5. Update this documentation
-
-### Modifying API Routes
-1. Update `nginx/nginx.dev.conf` location blocks
-2. Test routing with `docker-compose restart nginx-gateway`
-3. Update API documentation
-4. Ensure production config is synchronized when created
 
 ### Troubleshooting
 ```bash
@@ -201,42 +121,40 @@ docker logs api-gateway
 # Reload NGINX without downtime
 docker exec api-gateway nginx -s reload
 
-# Check service health
-curl http://localhost:8080/health
-
-# Test API routing
-curl http://localhost:8080/api/transactions
-curl http://localhost:8080/api/currencies
+# Test service connectivity
+docker-compose ps
 ```
+
+## Repository Structure
+
+**Discovery**:
+```bash
+# View structure
+tree -L 2 -I 'node_modules|target'
+```
+
+**Key directories**:
+- [nginx/](nginx/) - Gateway configuration (dev and prod)
+- [scripts/](scripts/) - Automation and tooling
+- [docs/](docs/) - Architecture and cross-service documentation
+- [kubernetes/](kubernetes/) - Production deployment manifests
 
 ## Service Repositories
 
 Each microservice is maintained in its own repository:
-- **service-common**: [https://github.com/budget-analyzer/service-common]
-- **transaction-service**: [https://github.com/budget-analyzer/transaction-service]
-- **currency-service**: [https://github.com/budget-analyzer/currency-service]
-- **budget-analyzer-web**: [https://github.com/budget-analyzer/budget-analyzer-web]
+- **service-common**: https://github.com/budget-analyzer/service-common
+- **transaction-service**: https://github.com/budget-analyzer/transaction-service
+- **currency-service**: https://github.com/budget-analyzer/currency-service
+- **budget-analyzer-web**: https://github.com/budget-analyzer/budget-analyzer-web
 
-## Deployment
+## Best Practices
 
-### Local Development
-Uses `docker-compose.yml` with NGINX gateway. Backend services run on host machine for easier debugging and hot-reload.
-
-### Production (Kubernetes)
-Uses manifests in `kubernetes/` directory. All services containerized and deployed to cluster.
-
-## Future Enhancements
-
-- [ ] Production Docker Compose configuration
-- [ ] Complete Kubernetes manifests for all services
-- [ ] CI/CD pipeline integration (GitHub Actions/Jenkins)
-- [ ] Automated testing scripts
-- [ ] Database migration management
-- [ ] Monitoring and observability stack (Prometheus, Grafana)
-- [ ] Service mesh integration (Istio/Linkerd - optional)
-- [ ] API documentation aggregation (Swagger/OpenAPI)
-- [ ] Distributed tracing (Jaeger/Zipkin)
-- [ ] Centralized logging (ELK/Loki stack)
+1. **Environment Parity**: Keep dev and prod configurations as similar as possible
+2. **Configuration Management**: Use environment variables for configuration
+3. **Health Checks**: All services expose health endpoints
+4. **Service Independence**: Each microservice should be independently deployable
+5. **API Versioning**: Version APIs to support backward compatibility
+6. **Living Documentation**: Verify accuracy by running discovery commands
 
 ## Notes for Claude Code
 
@@ -245,12 +163,8 @@ When working on this project:
 - **Distinguish between informational statements and action requests** - If the user says "I did X", they're informing you, not asking you to do it
 - **Questions deserve answers, not implementations** - Respond to questions with information, not code changes
 - **Wait for explicit implementation requests** - Only implement when the user says "implement", "do it", "make this change", or similar action-oriented language
-- Maintain separation between dev and prod configurations
 - Follow the resource-based routing pattern for new API endpoints
 - Ensure Docker configurations remain simple and maintainable
 - Keep service independence - avoid tight coupling between services
-- Update this file when architecture changes
-- Follow Spring Boot and React best practices
-- Prioritize production readiness while maintaining dev experience
 - Each microservice lives in its own repository
 - This orchestration repo coordinates deployment and environment setup
