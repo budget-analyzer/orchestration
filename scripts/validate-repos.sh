@@ -52,18 +52,6 @@ for REPO in "${REPOS[@]}"; do
 
     cd "$REPO_PATH"
 
-    # Check for uncommitted changes
-    if ! git diff-index --quiet HEAD --; then
-        print_warning "Uncommitted changes in $REPO"
-        VALIDATION_FAILED=1
-        continue
-    fi
-
-    # Check for untracked files
-    if [ -n "$(git ls-files --others --exclude-standard)" ]; then
-        print_warning "Untracked files in $REPO"
-    fi
-
     # Check if on main branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [ "$CURRENT_BRANCH" != "main" ]; then
@@ -112,6 +100,7 @@ for REPO in "${REPOS[@]}"; do
         continue
     fi
 
+    # If behind remote, pull first (in fix mode) before checking for uncommitted changes
     if [ "$LOCAL" != "$REMOTE" ]; then
         if [ "$LOCAL" = "$BASE" ]; then
             if [ $FIX_MODE -eq 1 ]; then
@@ -137,6 +126,27 @@ for REPO in "${REPOS[@]}"; do
             VALIDATION_FAILED=1
             continue
         fi
+    elif [ $FIX_MODE -eq 1 ]; then
+        # Even when up-to-date, pull to refresh working tree (fixes stale index after push)
+        print_info "Pulling to refresh working tree for $REPO..."
+        if git pull origin main --quiet 2>/dev/null; then
+            print_info "✓ Working tree refreshed for $REPO"
+        fi
+    fi
+
+    # Refresh the git index to avoid false positives
+    git update-index --refresh >/dev/null 2>&1 || true
+
+    # Check for uncommitted changes
+    if ! git diff-index --quiet HEAD --; then
+        print_warning "Uncommitted changes in $REPO"
+        VALIDATION_FAILED=1
+        continue
+    fi
+
+    # Check for untracked files
+    if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+        print_warning "Untracked files in $REPO"
     fi
 
     print_success "✓ $REPO"
