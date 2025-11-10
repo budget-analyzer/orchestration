@@ -126,7 +126,7 @@ cat budget-analyzer-web/package.json | grep '"react"'
 cat service-common/pom.xml | grep '<spring-boot.version>'
 
 # Infrastructure versions
-docker-compose config | grep 'image:' | sort -u
+docker compose config | grep 'image:' | sort -u
 ```
 
 ### Core Technologies
@@ -200,13 +200,13 @@ docker-compose config | grep 'image:' | sort -u
 
 ```bash
 # List all services
-docker-compose config --services
+docker compose config --services
 
 # View service configurations
-docker-compose config
+docker compose config
 
 # Check running services
-docker-compose ps
+docker compose ps
 
 # View API routes
 grep "location /api" nginx/nginx.dev.conf | grep -v "#"

@@ -46,4 +46,31 @@
 
 ## References
 - [Link to related docs]
-- [Link to discussions]
+- [Link to discussions or issues]
+- [Link to implementation PRs]
+
+---
+
+## Usage Notes
+
+### When to Create an ADR
+- Any architectural decision that affects multiple services
+- Technology choices (framework selection, version upgrades)
+- Pattern changes (new testing strategy, API design conventions)
+- Infrastructure decisions (add message queue, switch databases)
+
+### ADR Numbering
+Use sequential numbering: `001-title.md`, `002-title.md`, etc.
+
+### Status Lifecycle
+- **Proposed**: Decision under discussion
+- **Accepted**: Decision approved and being implemented
+- **Superseded**: Replaced by a newer decision (reference the new ADR)
+- **Deprecated**: No longer applicable but kept for historical context
+
+### Tips for Writing Good ADRs
+1. **Context is key**: Explain the problem clearly before the solution
+2. **Document alternatives**: Show you considered multiple approaches
+3. **Be honest about consequences**: Every decision has tradeoffs
+4. **Keep it concise**: Aim for 1-2 pages
+5. **Link references**: Connect to related docs, PRs, issues

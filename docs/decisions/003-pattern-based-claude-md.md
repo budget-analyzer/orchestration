@@ -23,7 +23,7 @@ This plan transforms the Budget Analyzer documentation from specificity-based (l
 
 ### Current Issues
 1. **Service inventory drift** - Hard-coded service lists become outdated
-2. **Port/config brittleness** - Specific values duplicate docker-compose.yml
+2. **Port/config brittleness** - Specific values duplicate docker compose.yml
 3. **Route documentation lag** - NGINX routes documented incompletely
 4. **Version vagueness** - "Spring Boot 3.x" will become stale
 5. **Class name references** - Extremely prone to refactoring drift
@@ -70,9 +70,9 @@ From web research and codebase analysis:
 **✅ Pattern: Discovery-Based**
 ```markdown
 ### Core Services
-Services defined in `docker-compose.yml`. Discover with:
+Services defined in `docker compose.yml`. Discover with:
 ```bash
-docker-compose config --services
+docker compose config --services
 ```
 
 **Patterns:**
@@ -106,7 +106,7 @@ cat nginx/nginx.dev.conf | grep "location /api"
 | Spring Boot patterns | PATTERN-BASED | service-common/CLAUDE.md | Naming conventions, not classes |
 | API contracts | FULLY SPECIFIC | service/docs/api/openapi.yaml | Machine-readable, versioned |
 | Business domain | SEMI-SPECIFIC | service/docs/domain.md | Service-specific, detailed |
-| Deployment config | FILE REFERENCES | orchestration/CLAUDE.md | Point to docker-compose.yml |
+| Deployment config | FILE REFERENCES | orchestration/CLAUDE.md | Point to docker compose.yml |
 
 **Rule of Thumb:**
 - If it changes during refactoring → Use patterns
@@ -183,7 +183,7 @@ budget-analyzer/
 |--------------|----------|---------|
 | System architecture | `orchestration/docs/architecture/` | Microservices diagram, gateway pattern |
 | Development environment | `orchestration/docs/development/` | Docker setup, database seeding |
-| Deployment patterns | `orchestration/docs/deployment/` | K8s manifests, docker-compose |
+| Deployment patterns | `orchestration/docs/deployment/` | K8s manifests, docker compose |
 | Spring Boot conventions | `service-common/docs/` | **THE** source of truth for all Spring services |
 | Service API contracts | `service/docs/api/` | OpenAPI specs, endpoint docs |
 | Service business logic | `service/docs/` | Domain models, business rules |
@@ -233,36 +233,36 @@ From drift analysis:
 
 **Problems:**
 - Adding a fourth service means updating CLAUDE.md
-- Port numbers duplicate docker-compose.yml
+- Port numbers duplicate docker compose.yml
 - Descriptions will drift from actual functionality
 
 #### After: Pattern-Based (Target)
 ```markdown
 ### Service Architecture
 
-**Pattern**: Microservices defined in `docker-compose.yml`
+**Pattern**: Microservices defined in `docker compose.yml`
 
 **Discovery:**
 ```bash
 # List all services
-docker-compose config --services
+docker compose config --services
 
 # View service details
-docker-compose config
+docker compose config
 
 # See ports and routing
-cat docker-compose.yml | grep -A 5 "ports:"
+cat docker compose.yml | grep -A 5 "ports:"
 cat nginx/nginx.dev.conf | grep "location /api"
 ```
 
 **Service Types:**
 - **Frontend services**: React-based web applications (typically port 3000 in dev)
-- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker-compose.yml)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
 - **Gateway**: NGINX reverse proxy (port 8080) routes all frontend requests
 
 **Adding New Services:**
-1. Add service to `docker-compose.yml`
+1. Add service to `docker compose.yml`
 2. Add routes to `nginx/nginx.dev.conf` if frontend-facing
 3. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
 4. See @docs/architecture/service-onboarding.md
@@ -328,7 +328,7 @@ curl -v http://localhost:8080/api/v1/transactions
        proxy_pass http://host.docker.internal:8082/your-resource;
    }
    ```
-2. Restart gateway: `docker-compose restart nginx-gateway`
+2. Restart gateway: `docker compose restart nginx-gateway`
 3. Test: `curl http://localhost:8080/api/v1/your-resource`
 
 **Pattern Benefits:**
@@ -392,19 +392,19 @@ cat budget-analyzer-web/package.json | grep '"react"'
 cat service-common/pom.xml | grep '<spring-boot.version>'
 
 # Docker images (all infrastructure)
-cat docker-compose.yml | grep 'image:' | sort -u
+cat docker compose.yml | grep 'image:' | sort -u
 ```
 
 **Stack Patterns:**
 - **Frontend**: React (see individual service package.json)
 - **Backend**: Spring Boot + Java (version in service-common/pom.xml)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
 - **Gateway**: NGINX (Alpine-based)
 
 **Version Management:**
 - Spring Boot: Defined in `service-common/pom.xml` (single source of truth)
 - Individual services: Inherit from service-common, never override
-- Docker images: **Should be pinned** (TODO: pin versions in docker-compose.yml)
+- Docker images: **Should be pinned** (TODO: pin versions in docker compose.yml)
 
 **See also:**
 - @service-common/docs/common-dependencies.md - Spring Boot dependency strategy
@@ -501,7 +501,7 @@ scripts/generate-unified-api-docs.sh
 Transform orchestration/CLAUDE.md:
 
 - [ ] Replace service inventory with discovery pattern
-- [ ] Replace port numbers with docker-compose.yml reference
+- [ ] Replace port numbers with docker compose.yml reference
 - [ ] Replace route list with nginx config reference + pattern explanation
 - [ ] Replace technology versions with discovery commands
 - [ ] Replace script directory claims with actual structure discovery
@@ -805,7 +805,7 @@ See @docs/database-schema.md for:
 **Quick start**:
 ```bash
 # From orchestration repo
-docker-compose up shared-postgres
+docker compose up shared-postgres
 ./mvnw spring-boot:run
 
 # Run tests
@@ -916,7 +916,7 @@ See @docs/import-processing.md for:
 ```bash
 # Start dependencies
 cd orchestration/
-docker-compose up shared-postgres
+docker compose up shared-postgres
 
 # Run service
 cd transaction-service/
@@ -985,7 +985,7 @@ orchestration/docs/
 │   └── testing-strategy.md         # Cross-service testing
 │
 ├── deployment/                      # Infrastructure as code
-│   ├── docker-compose-guide.md     # Using docker-compose
+│   ├── docker compose-guide.md     # Using docker compose
 │   ├── kubernetes-deployment.md    # K8s deployment
 │   └── environment-variables.md    # Config management
 │
@@ -1125,7 +1125,7 @@ Budget Analyzer is a microservices architecture with multiple independently depl
 
 Create a dedicated "orchestration" repository that:
 - Contains no application code
-- Hosts docker-compose for local development
+- Hosts docker compose for local development
 - Manages NGINX gateway configuration
 - Provides system-wide documentation
 - Includes deployment manifests (Kubernetes)
@@ -1148,7 +1148,7 @@ Put all services in a single repository.
 - Team boundaries less clear
 
 ### Alternative 2: No Orchestration Repo
-Each service self-contains its docker-compose and docs.
+Each service self-contains its docker compose and docs.
 
 **Pros:**
 - No extra repository
@@ -1399,9 +1399,9 @@ Before (specificity-based):
 After (pattern-based):
 ```markdown
 ### Core Services
-Services defined in `docker-compose.yml`. Discover with:
+Services defined in `docker compose.yml`. Discover with:
 ```bash
-docker-compose config --services
+docker compose config --services
 ```
 
 Pattern: Spring Boot services on ports 8082+
@@ -1625,7 +1625,7 @@ When creating a new Spring Boot service:
 - [ ] Update `orchestration/docs/architecture/system-overview.md`
 
 ### Integration
-- [ ] Add service to `orchestration/docker-compose.yml`
+- [ ] Add service to `orchestration/docker compose.yml`
 - [ ] Add routes to `orchestration/nginx/nginx.dev.conf`
 - [ ] Add health check endpoint (`/actuator/health`)
 - [ ] Test routing through gateway
@@ -1712,7 +1712,7 @@ See @docs/{feature-name}.md
 ```bash
 # Start dependencies
 cd orchestration/
-docker-compose up shared-postgres
+docker compose up shared-postgres
 
 # Run service
 cd {service-name}/
@@ -1964,7 +1964,7 @@ Every 3 months:
 - **Don't update** when:
   - New service added (discovery commands reveal it)
   - Specific class renamed (not referenced in CLAUDE.md)
-  - Port numbers change (docker-compose.yml is source of truth)
+  - Port numbers change (docker compose.yml is source of truth)
   - New API endpoint added (OpenAPI spec is source of truth)
 
 ### Red Flags (Indicates Drift)
@@ -2008,7 +2008,7 @@ We're adopting a new approach to CLAUDE.md files and documentation to reduce dri
 
 **Examples:**
 Before: "transaction-service runs on port 8082"
-After: "See docker-compose.yml for ports: `cat docker-compose.yml | grep ports:`"
+After: "See docker compose.yml for ports: `cat docker compose.yml | grep ports:`"
 
 Questions? See the full plan doc or ping me.
 
@@ -2107,13 +2107,13 @@ The frontend should call the NGINX gateway at `http://localhost:8080/api/*`:
 **Discovery**:
 ```bash
 # List all services
-docker-compose config --services
+docker compose config --services
 
 # View full configuration
-docker-compose config
+docker compose config
 
 # See service ports
-docker-compose ps
+docker compose ps
 ```
 
 **Service Types**:
@@ -2157,13 +2157,13 @@ cat budget-analyzer-web/package.json | grep '"react"'
 cat service-common/pom.xml | grep '<spring-boot.version>'
 
 # Infrastructure versions
-docker-compose config | grep 'image:' | sort -u
+docker compose config | grep 'image:' | sort -u
 ```
 
 **Stack patterns**:
 - **Frontend**: React (version in package.json)
 - **Backend**: Spring Boot + Java (version in service-common)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
 
 **Version management**:
 - Spring Boot: Defined in service-common/pom.xml (single source of truth)

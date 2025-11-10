@@ -221,20 +221,20 @@ This is the power of resource-based routing!
 
 ### Changing the Gateway Port
 
-Edit `docker-compose.yml` and change `"8080:80"` to your desired port (e.g., `"9000:80"`).
+Edit `docker compose.yml` and change `"8080:80"` to your desired port (e.g., `"9000:80"`).
 
 Then access at `http://localhost:9000`.
 
 ### Linux Users
 
-If you're on Linux, `host.docker.internal` doesn't work by default. Add it to `docker-compose.yml`:
+If you're on Linux, `host.docker.internal` doesn't work by default. Add it to `docker compose.yml`:
 
 ```yaml
 extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
 
-(This is already configured in the provided docker-compose.yml)
+(This is already configured in the provided docker compose.yml)
 
 ## Hot Module Replacement (HMR)
 
@@ -304,7 +304,7 @@ If you see CORS errors:
 
 ### Connection refused on host.docker.internal
 
-**Linux users:** Make sure you have the `extra_hosts` configuration in `docker-compose.yml`:
+**Linux users:** Make sure you have the `extra_hosts` configuration in `docker compose.yml`:
 ```yaml
 extra_hosts:
   - "host.docker.internal:host-gateway"

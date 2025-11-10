@@ -16,28 +16,28 @@ This orchestration repository coordinates the deployment and development environ
 
 ## Service Architecture
 
-**Pattern**: Microservices defined in [docker-compose.yml](docker-compose.yml)
+**Pattern**: Microservices defined in [docker compose.yml](docker compose.yml)
 
 **Discovery**:
 ```bash
 # List all services
-docker-compose config --services
+docker compose config --services
 
 # View service details and ports
-docker-compose config
+docker compose config
 
 # See running services
-docker-compose ps
+docker compose ps
 ```
 
 **Service Types**:
 - **Frontend services**: React-based web applications (typically port 3000 in dev)
-- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker-compose.yml)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
 - **Gateway**: NGINX reverse proxy (port 8080) routes all frontend requests
 
 **Adding New Services**:
-1. Add service to [docker-compose.yml](docker-compose.yml)
+1. Add service to [docker compose.yml](docker compose.yml)
 2. Add routes to [nginx/nginx.dev.conf](nginx/nginx.dev.conf) if frontend-facing
 3. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
 
@@ -76,16 +76,16 @@ curl -v http://localhost:8080/api/v1/health
 **Discovery**:
 ```bash
 # List infrastructure versions
-docker-compose config | grep 'image:' | sort -u
+docker compose config | grep 'image:' | sort -u
 
 # Check service ports
-grep -A 3 "ports:" docker-compose.yml
+grep -A 3 "ports:" docker compose.yml
 ```
 
 **Stack Patterns**:
 - **Frontend**: React (see individual service package.json)
 - **Backend**: Spring Boot + Java (version managed in service-common)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker-compose.yml)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
 - **Gateway**: NGINX (Alpine-based)
 
 **Note**: Docker images should be pinned to specific versions for reproducibility.
@@ -101,13 +101,13 @@ grep -A 3 "ports:" docker-compose.yml
 ### Quick Start
 ```bash
 # Start all infrastructure
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop all services
-docker-compose down
+docker compose down
 ```
 
 ### Troubleshooting
@@ -122,7 +122,7 @@ docker logs api-gateway
 docker exec api-gateway nginx -s reload
 
 # Test service connectivity
-docker-compose ps
+docker compose ps
 ```
 
 ## Repository Structure

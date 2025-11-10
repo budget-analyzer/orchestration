@@ -52,7 +52,7 @@ To add documentation for a new microservice:
 
 1. Update `docs-aggregator/index.html` - add new URL to the array
 2. Update `nginx/nginx.dev.conf` to proxy the new service's api-docs endpoint
-3. Restart services: `docker-compose restart nginx-gateway`
+3. Restart services: `docker compose restart nginx-gateway`
 
 ## Dependencies
 

@@ -16,7 +16,7 @@ Budget Analyzer is a microservices architecture with multiple independently depl
 
 Create a dedicated "orchestration" repository that:
 - Contains no application code
-- Hosts docker-compose for local development
+- Hosts docker compose for local development
 - Manages NGINX gateway configuration
 - Provides system-wide documentation
 - Includes deployment manifests (Kubernetes)
@@ -39,7 +39,7 @@ Put all services in a single repository.
 - Team boundaries less clear
 
 ### Alternative 2: No Orchestration Repo
-Each service self-contains its docker-compose and docs.
+Each service self-contains its docker compose and docs.
 
 **Pros:**
 - No extra repository

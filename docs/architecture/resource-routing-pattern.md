@@ -89,7 +89,7 @@ location /api/v1/budgets {
 ### Step 3: Restart Gateway
 
 ```bash
-docker-compose restart api-gateway
+docker compose restart api-gateway
 ```
 
 ### Step 4: Test
@@ -227,7 +227,7 @@ fetch('/api/v1/transactions')
 grep "/api/v1/your-resource" nginx/nginx.dev.conf
 
 # Check if NGINX is running
-docker-compose ps api-gateway
+docker compose ps api-gateway
 
 # View NGINX logs
 docker logs api-gateway
@@ -237,7 +237,7 @@ docker logs api-gateway
 
 ```bash
 # Check if backend service is running
-docker-compose ps transaction-service
+docker compose ps transaction-service
 
 # Check backend service logs
 docker logs transaction-service

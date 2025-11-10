@@ -9,7 +9,7 @@ This configuration provides a sandboxed Claude Code environment shared across mu
 ├── orchestration/
 │   ├── claude-code-sandbox/          ← Shared configuration (this directory)
 │   │   ├── Dockerfile
-│   │   ├── docker-compose.yml
+│   │   ├── docker compose.yml
 │   │   ├── entrypoint.sh
 │   │   └── README.md
 │   └── .devcontainer/
@@ -41,7 +41,7 @@ mkdir -p claude-code-sandbox
 
 # Copy these files into claude-code-sandbox/:
 # - Dockerfile
-# - docker-compose.yml
+# - docker compose.yml
 # - entrypoint.sh
 # - README.md (this file)
 
@@ -167,7 +167,7 @@ Both windows share the same container and tools but focus on different projects.
 
 ### Security Features
 - Claude Code sandbox directory mounted read-only
-- Cannot modify Dockerfile, docker-compose.yml, or entrypoint.sh
+- Cannot modify Dockerfile, docker compose.yml, or entrypoint.sh
 - Container user matches host user (no root access needed)
 
 ## Workspace Access
@@ -198,10 +198,10 @@ with the approach in currency-service"
 docker ps | grep claude-dev
 
 # View container logs
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml logs
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml logs
 
 # Rebuild container
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml build --no-cache
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml build --no-cache
 ```
 
 ### Permission Errors
@@ -237,7 +237,7 @@ docker exec -it <container-id> printenv ANTHROPIC_API_KEY
 This is intentional - the sandbox directory is mounted read-only for security. To modify configuration:
 
 1. Exit all devcontainer VS Code windows
-2. Stop the container: `docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml down`
+2. Stop the container: `docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml down`
 3. Edit files on host: `/home/devex/dev/orchestration/claude-code-sandbox/`
 4. Restart: Open any project in VS Code and reopen in container
 
@@ -270,7 +270,7 @@ RUN npm install -g @angular/cli
 
 Then rebuild:
 ```bash
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml build
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml build
 ```
 
 ### Changing Java or Maven Versions
@@ -298,7 +298,7 @@ Note: Extensions are per-project, not shared across all projects.
 
 Currently using `network_mode: host` for simplicity. To use bridge networking:
 
-Edit `docker-compose.yml`:
+Edit `docker compose.yml`:
 ```yaml
 network_mode: bridge
 ports:
@@ -321,12 +321,12 @@ ports:
 
 ```bash
 # Stop container
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml down
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml down
 
 # Update Dockerfile with new versions
 
 # Rebuild
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml build --no-cache
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml build --no-cache
 
 # Restart by opening any project in VS Code
 ```
@@ -335,13 +335,13 @@ docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compo
 
 ```bash
 # Stop container
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml down
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml down
 
 # Remove volumes (loses Claude Code credentials)
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml down -v
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml down -v
 
 # Remove images
-docker-compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml down --rmi all
+docker compose -f /home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml down --rmi all
 ```
 
 ## File Naming Reference
@@ -351,7 +351,7 @@ When copying files from the outputs directory:
 | Output File | Destination |
 |------------|-------------|
 | `Dockerfile` | `/home/devex/dev/orchestration/claude-code-sandbox/Dockerfile` |
-| `docker-compose.yml` | `/home/devex/dev/orchestration/claude-code-sandbox/docker-compose.yml` |
+| `docker compose.yml` | `/home/devex/dev/orchestration/claude-code-sandbox/docker compose.yml` |
 | `entrypoint.sh` | `/home/devex/dev/orchestration/claude-code-sandbox/entrypoint.sh` |
 | `orchestration-devcontainer.json` | `/home/devex/dev/orchestration/.devcontainer/devcontainer.json` |
 | `transaction-service-devcontainer.json` | `/home/devex/dev/transaction-service/.devcontainer/devcontainer.json` |

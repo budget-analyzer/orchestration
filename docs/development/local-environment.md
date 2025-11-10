@@ -73,20 +73,20 @@ git clone https://github.com/budget-analyzer/budget-analyzer-web.git
 cd orchestration/
 
 # Start everything (infrastructure + services)
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop everything
-docker-compose down
+docker compose down
 ```
 
 ### 3. Verify Services
 
 ```bash
 # Check all services running
-docker-compose ps
+docker compose ps
 
 # Test gateway
 curl http://localhost:8080/health
@@ -106,14 +106,14 @@ open http://localhost:3000
 Start just infrastructure (PostgreSQL, Redis, RabbitMQ, NGINX):
 
 ```bash
-docker-compose up -d postgres redis rabbitmq api-gateway
+docker compose up -d postgres redis rabbitmq api-gateway
 ```
 
 ### Backend Services (Spring Boot)
 
 **Option 1: Run in Docker**
 ```bash
-docker-compose up -d transaction-service currency-service
+docker compose up -d transaction-service currency-service
 ```
 
 **Option 2: Run locally (for development)**
@@ -140,7 +140,7 @@ cd currency-service/
 
 **Option 1: Run in Docker**
 ```bash
-docker-compose up -d budget-analyzer-web
+docker compose up -d budget-analyzer-web
 ```
 
 **Option 2: Run locally (for development)**
@@ -160,7 +160,7 @@ npm start
 
 ```bash
 cd orchestration/
-docker-compose up -d
+docker compose up -d
 ```
 
 **All services in Docker:**
@@ -175,7 +175,7 @@ docker-compose up -d
 ```bash
 # Start infrastructure + frontend
 cd orchestration/
-docker-compose up -d postgres redis rabbitmq api-gateway budget-analyzer-web
+docker compose up -d postgres redis rabbitmq api-gateway budget-analyzer-web
 
 # Run backend locally
 cd transaction-service/
@@ -194,7 +194,7 @@ cd transaction-service/
 ```bash
 # Start infrastructure + backend
 cd orchestration/
-docker-compose up -d postgres redis rabbitmq api-gateway \
+docker compose up -d postgres redis rabbitmq api-gateway \
   transaction-service currency-service
 
 # Run frontend locally
@@ -214,7 +214,7 @@ npm start
 ```bash
 # Start only infrastructure
 cd orchestration/
-docker-compose up -d postgres redis rabbitmq api-gateway
+docker compose up -d postgres redis rabbitmq api-gateway
 
 # Terminal 1: transaction-service
 cd transaction-service/
@@ -324,40 +324,40 @@ lsof -i :8082
 # Kill process
 kill -9 <PID>
 
-# Or change port in docker-compose.yml
+# Or change port in docker compose.yml
 ```
 
 ### Database Connection Refused
 
 ```bash
 # Check if PostgreSQL is running
-docker-compose ps postgres
+docker compose ps postgres
 
 # View PostgreSQL logs
 docker logs postgres
 
 # Restart PostgreSQL
-docker-compose restart postgres
+docker compose restart postgres
 ```
 
 ### Service Not Responding
 
 ```bash
 # Check service logs
-docker-compose logs transaction-service
+docker compose logs transaction-service
 
 # Check if service is healthy
 curl http://localhost:8082/actuator/health
 
 # Restart service
-docker-compose restart transaction-service
+docker compose restart transaction-service
 ```
 
 ### Frontend Not Loading
 
 ```bash
 # Check if frontend is running
-docker-compose ps budget-analyzer-web
+docker compose ps budget-analyzer-web
 
 # View frontend logs
 docker logs budget-analyzer-web
@@ -366,7 +366,7 @@ docker logs budget-analyzer-web
 curl http://localhost:8080/health
 
 # Rebuild frontend
-docker-compose up -d --build budget-analyzer-web
+docker compose up -d --build budget-analyzer-web
 ```
 
 ### NGINX Gateway Issues
@@ -382,7 +382,7 @@ docker logs api-gateway
 docker exec api-gateway nginx -s reload
 
 # Restart gateway
-docker-compose restart api-gateway
+docker compose restart api-gateway
 ```
 
 ## Data Seeding
