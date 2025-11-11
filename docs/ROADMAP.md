@@ -40,7 +40,6 @@ This document outlines planned features and enhancements across the Budget Analy
 - [ ] **Add audit logging interceptor** - Automatic logging of entity changes
 
 #### HIGH PRIORITY - Testing
-- [ ] **Add integration tests** - Test Spring Boot integration and component scanning
 - [ ] **Add example usage tests** - Demonstrate how to use each feature
 
 #### MEDIUM PRIORITY - Utilities
@@ -154,6 +153,9 @@ This document outlines planned features and enhancements across the Budget Analy
 ---
 
 ## Completed
+
+### Service-Common
+- [x] **Add integration tests** - Test Spring Boot integration and component scanning (Completed: 2025-11-11)
 
 _Items moved here when implemented_
 
