@@ -34,7 +34,7 @@ services:
       # Required for Docker Desktop compatibility (allows containers to reach host)
       - TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
       - TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal
-      - TESTCONTAINERS_RYUK_DISABLED=true
+      - TESTCONTAINERS_REUSE_ENABLE=true
 
     # Keep container running
     command: sleep infinity
