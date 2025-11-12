@@ -39,13 +39,37 @@ RUN apt-get update && apt-get install -y maven \
 ENV MAVEN_HOME=/usr/share/maven
 ENV PATH=$MAVEN_HOME/bin:$PATH
 
+# Install Docker CLI (for docker-outside-of-docker pattern with Testcontainers)
+#
+# Note: Pinning to Docker 28.5.2 because 29.0.0 requires client version 1.44+
+#       and Testcontainers uses client version 1.32.  Revisit when Testcontainers
+#       releases a fix.
+#
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli=5:28.5.2-1~ubuntu.24.04~noble docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create vscode user with matching UID/GID from host
 ARG USERNAME=vscode
-ARG USER_UID=1002
-ARG USER_GID=1002
+ARG USER_UID
+ARG USER_GID
+ARG DOCKER_GID
 
+# Create docker group with host's docker GID
+RUN groupadd --gid $DOCKER_GID docker || true
+
+# Create vscode group and user
 RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME -s /bin/bash \
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+    && usermod -aG docker $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Install Claude Code CLI globally
