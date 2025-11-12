@@ -5,6 +5,8 @@
   "workspaceFolder": "/workspace/orchestration",
   "shutdownAction": "none",
   
+  "initializeCommand": "bash ${localWorkspaceFolder}/claude-code-sandbox/setup-env.sh",
+  
   "customizations": {
     "vscode": {
       "extensions": [
