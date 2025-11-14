@@ -43,17 +43,16 @@ docker compose ps
 
 ## API Gateway Pattern
 
-**Frontend calls**: All requests go through NGINX gateway (`http://localhost:8080/api/*`)
+**Pattern**: Resource-based routing through NGINX gateway. Frontend calls clean paths like `/api/transactions`, NGINX routes to appropriate microservice with path transformation. All requests go through `http://localhost:8080/api/*`.
 
-**Routing Strategy**: Resource-based (not service-based)
-- Frontend is decoupled from service topology
-- Moving a resource to different service = NGINX config change only
-- No DNS resolver needed
-- Clean RESTful paths
+**Quick Reference**:
+- All routes defined in [nginx/nginx.dev.conf](nginx/nginx.dev.conf)
+- Routing pattern: `location /api/{resource}` → `rewrite ^/api/(.*)$` → `proxy_pass http://{upstream}`
+- Services use `host.docker.internal` to reach host services from Docker container
+- WebSocket support included for React HMR (hot module replacement)
+- Benefits: Frontend decoupled from service topology, services can be split/merged without frontend changes
 
-**Current Routes**: See [nginx/nginx.dev.conf](nginx/nginx.dev.conf) (source of truth)
-
-**Discovery**:
+**Discovery** (inspect routes without reading full config):
 ```bash
 # List all API routes
 grep "location /api" nginx/nginx.dev.conf | grep -v "#"
@@ -62,12 +61,11 @@ grep "location /api" nginx/nginx.dev.conf | grep -v "#"
 curl -v http://localhost:8080/api/v1/health
 ```
 
-**Pattern Benefits**:
-- Frontend never knows which service handles a resource
-- Services can be split/merged without frontend changes
-- API versioning handled at gateway level
-
-**See also**: [nginx/README.md](nginx/README.md)
+**When to consult detailed nginx documentation**:
+- Adding new API routes → Read "Adding a New Resource Route" in [nginx/README.md](nginx/README.md)
+- Adding new microservices → Read "Adding a New Microservice" in [nginx/README.md](nginx/README.md)
+- Moving resources between services → Read "Moving a Resource Between Services" in [nginx/README.md](nginx/README.md)
+- Troubleshooting gateway issues → Read "Troubleshooting" section in [nginx/README.md](nginx/README.md)
 
 ## Technology Stack
 
@@ -111,8 +109,10 @@ docker compose down
 ```
 
 ### Troubleshooting
+
+**Quick commands**:
 ```bash
-# Check NGINX configuration
+# Check NGINX configuration validity
 docker exec api-gateway nginx -t
 
 # View NGINX logs
@@ -124,6 +124,8 @@ docker exec api-gateway nginx -s reload
 # Test service connectivity
 docker compose ps
 ```
+
+**For detailed troubleshooting**: When encountering specific issues (502 errors, CORS problems, HMR not working, connection refused, etc.), consult the comprehensive troubleshooting guide in [nginx/README.md](nginx/README.md)
 
 ## Repository Structure
 
