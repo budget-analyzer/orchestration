@@ -161,10 +161,6 @@ Each microservice is maintained in its own repository:
 ## Notes for Claude Code
 
 When working on this project:
-- **NEVER implement changes without explicit permission** - Always present a plan and wait for approval
-- **Distinguish between informational statements and action requests** - If the user says "I did X", they're informing you, not asking you to do it
-- **Questions deserve answers, not implementations** - Respond to questions with information, not code changes
-- **Wait for explicit implementation requests** - Only implement when the user says "implement", "do it", "make this change", or similar action-oriented language
 - Follow the resource-based routing pattern for new API endpoints
 - Ensure Docker configurations remain simple and maintainable
 - Keep service independence - avoid tight coupling between services
