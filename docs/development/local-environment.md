@@ -67,6 +67,8 @@ git clone https://github.com/budget-analyzer/budget-analyzer-web.git
 └── budget-analyzer-web/     # React frontend
 ```
 
+**Important:** This side-by-side layout is **required** for cross-repository documentation links to work correctly. Claude Code uses relative paths (e.g., `../service-common/CLAUDE.md`) to navigate between repositories, which only works when repositories are cloned adjacent to each other.
+
 ### 2. Start All Services
 
 ```bash

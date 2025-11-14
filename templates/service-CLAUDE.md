@@ -13,7 +13,7 @@
 
 **This service follows standard Budget Analyzer Spring Boot conventions.**
 
-See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-common/blob/main/CLAUDE.md) for:
+See [../service-common/CLAUDE.md](../service-common/CLAUDE.md) for:
 - Architecture layers (Controller → Service → Repository)
 - Naming conventions
 - Testing patterns
@@ -72,7 +72,7 @@ cd {service-name}/
 curl http://localhost:{PORT}/actuator/health
 ```
 
-**See**: [@orchestration/docs/development/local-environment.md](https://github.com/budget-analyzer/orchestration/blob/main/docs/development/local-environment.md)
+**See**: [../orchestration/docs/development/local-environment.md](../orchestration/docs/development/local-environment.md)
 
 ## Discovery Commands
 
@@ -89,8 +89,17 @@ cat src/main/resources/application.yml
 
 ## AI Assistant Guidelines
 
-1. **Follow service-common patterns** - See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-common/blob/main/CLAUDE.md)
+1. **Follow service-common patterns** - See [../service-common/CLAUDE.md](../service-common/CLAUDE.md)
 2. **Check OpenAPI spec first** - See @docs/api/openapi.yaml
 3. **Understand domain** - Read @docs/domain-model.md before changes
-4. **Test everything** - Follow [@service-common/docs/testing-patterns.md](https://github.com/budget-analyzer/service-common/blob/main/docs/testing-patterns.md)
+4. **Test everything** - Follow [../service-common/docs/testing-patterns.md](../service-common/docs/testing-patterns.md)
 5. {Service-specific guideline}
+
+---
+
+## External Links (GitHub Web Viewing)
+
+*The relative paths in this document are optimized for Claude Code. When viewing on GitHub, use these links:*
+
+- [Service-Common Documentation](https://github.com/budget-analyzer/service-common/tree/main/docs)
+- [Orchestration Documentation](https://github.com/budget-analyzer/orchestration/tree/main/docs)

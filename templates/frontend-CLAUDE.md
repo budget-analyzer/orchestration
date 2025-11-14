@@ -32,7 +32,7 @@ cat package.json | grep '"react"'
 
 **Pattern**: All API calls go through NGINX gateway at `http://localhost:8080/api/*`
 
-See [@orchestration/nginx/nginx.dev.conf](https://github.com/budget-analyzer/orchestration/blob/main/nginx/nginx.dev.conf) for available routes.
+See [../orchestration/nginx/nginx.dev.conf](../orchestration/nginx/nginx.dev.conf) for available routes.
 
 **Discovery**:
 ```bash
@@ -87,7 +87,7 @@ npm start
 open http://localhost:3000
 ```
 
-**Note**: Backend services must be running (see [@orchestration/docs/development/local-environment.md](https://github.com/budget-analyzer/orchestration/blob/main/docs/development/local-environment.md))
+**Note**: Backend services must be running (see [../orchestration/docs/development/local-environment.md](../orchestration/docs/development/local-environment.md))
 
 ## Building
 
@@ -119,3 +119,12 @@ npm run build && npx webpack-bundle-analyzer build/stats.json
 3. **Component patterns** - See @docs/component-patterns.md
 4. **Testing** - {Testing strategy}
 5. {Frontend-specific guideline}
+
+---
+
+## External Links (GitHub Web Viewing)
+
+*The relative paths in this document are optimized for Claude Code. When viewing on GitHub, use these links:*
+
+- [Orchestration Documentation](https://github.com/budget-analyzer/orchestration/tree/main/docs)
+- [NGINX Gateway Configuration](https://github.com/budget-analyzer/orchestration/tree/main/nginx)

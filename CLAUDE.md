@@ -166,3 +166,15 @@ When working on this project:
 - Keep service independence - avoid tight coupling between services
 - Each microservice lives in its own repository
 - This orchestration repo coordinates deployment and environment setup
+- All repositories should be cloned side-by-side in `/workspace/` for cross-repo documentation links to work
+
+---
+
+## External Links (GitHub Web Viewing)
+
+*The relative paths in this document are optimized for Claude Code. When viewing on GitHub, use these links to access other repositories:*
+
+- [Service-Common Repository](https://github.com/budget-analyzer/service-common)
+- [Transaction Service Repository](https://github.com/budget-analyzer/transaction-service)
+- [Currency Service Repository](https://github.com/budget-analyzer/currency-service)
+- [Budget Analyzer Web Repository](https://github.com/budget-analyzer/budget-analyzer-web)
