@@ -2,8 +2,12 @@
 ## Budget Analyzer Microservices Documentation Strategy
 
 **Date:** 2025-11-10
-**Status:** Approved - Ready for Implementation
+**Status:** Corrected - @ Syntax Guidance Updated (2025-11-15)
 **Context:** Addressing documentation drift and establishing sustainable patterns for AI context files
+
+**IMPORTANT UPDATE (2025-11-15):** This document has been corrected to reflect the accurate behavior of `@` syntax in CLAUDE.md files. The `@file.md` syntax **pre-loads content at startup** (not just-in-time loading). All examples have been updated to use plain text or markdown link references instead.
+
+**Current CLAUDE.md Validation:** The orchestration/CLAUDE.md file is already using the CORRECT pattern (plain text and markdown links, avoiding @ syntax). No changes to CLAUDE.md are needed - it's a model implementation.
 
 ---
 
@@ -37,7 +41,7 @@ From web research and codebase analysis:
 
 1. **Hierarchical CLAUDE.md files** - Claude loads from root → subdirectory automatically
 2. **Patterns over examples** - Document "how to find" not "what exists"
-3. **Reference source files** - Use `@path/to/file` syntax, don't duplicate content
+3. **Reference source files** - Use plain text or markdown links (NOT @ syntax), don't duplicate content
 4. **Discovery commands** - Provide grep/tree commands to reveal current state
 5. **Hub-and-spoke docs** - Central architecture docs, service-specific details in service repos
 6. **Keep CLAUDE.md concise** - 50-200 lines max, delegate details to docs/
@@ -80,26 +84,95 @@ Claude Code uses **hierarchical loading** with just-in-time document access:
 **Quote from Anthropic:**
 > "Claude will also discover CLAUDE.md nested in subtrees under your current working directory. Instead of loading them at launch, they are only included when Claude reads files in those subtrees."
 
-### Understanding @references: Import vs. Reference Pattern
+### Understanding @ Syntax: Imports Pre-Load Content
 
-**❌ Import Syntax (Loads at Startup):**
+**IMPORTANT**: The `@file.md` syntax in CLAUDE.md files **imports and pre-loads the entire file content at startup**, regardless of how it's used. This is NOT just-in-time loading.
+
+**❌ @ Syntax (Pre-Loads at Startup - Avoid in CLAUDE.md):**
 ```markdown
 @docs/domain-model.md
 ```
-When used bare in CLAUDE.md, this imports the entire file content at startup. High token cost.
+This imports the entire file content when Claude Code starts. **High token cost.**
 
-**✅ Reference Pattern (Just-in-Time Loading):**
+**❌ @ Syntax with Context (Still Pre-Loads - Avoid):**
 ```markdown
 ### Domain Model
 See @docs/domain-model.md for detailed entity relationships.
 
 **When to consult**:
 - Adding new entities → Read @docs/domain-model.md
-- Understanding relationships → Read @docs/domain-model.md
-- Validating business rules → Read @docs/domain-model.md
+```
+Despite the contextual text, the `@` syntax still pre-loads the full file. **Not recommended.**
+
+**✅ Correct Reference Pattern (Plain Text - No Pre-Loading):**
+```markdown
+### Domain Model
+See docs/domain-model.md for detailed entity relationships.
+
+**When to consult**:
+- Adding new entities → Read docs/domain-model.md
+- Understanding relationships → Read docs/domain-model.md
+- Validating business rules → Read docs/domain-model.md
 ```
 
-This provides a **pointer** to the documentation without loading it. Claude reads it only when needed.
+**✅ Alternative: Markdown Links (Also No Pre-Loading):**
+```markdown
+See [docs/domain-model.md](docs/domain-model.md) for detailed entity relationships.
+```
+
+These provide **pointers** to documentation without pre-loading it. Claude reads files only when needed during the conversation.
+
+### True Just-in-Time Loading: Hierarchical CLAUDE.md Discovery
+
+**The ONLY way to achieve just-in-time loading with CLAUDE.md files** is through Claude Code's hierarchical discovery mechanism:
+
+**How it works:**
+- CLAUDE.md files in **subdirectories** are discovered but not loaded at launch
+- They load **only when Claude reads files in those subtrees**
+- This is automatic - no special syntax required
+
+**Example structure:**
+```
+/workspace/
+├── orchestration/
+│   └── CLAUDE.md              # ✅ Loaded at startup (cwd)
+├── service-common/
+│   └── CLAUDE.md              # ⏱️ Loaded only when working in service-common/
+└── transaction-service/
+    └── CLAUDE.md              # ⏱️ Loaded only when working in transaction-service/
+```
+
+**Key insight**: Place service-specific context in service directories, not in the root orchestration CLAUDE.md.
+
+### How to Avoid Pre-Loading Content
+
+**Summary of strategies:**
+
+1. **Use plain text references** (not @ syntax)
+   ```markdown
+   See docs/domain-model.md for entity relationships.
+   ```
+
+2. **Use markdown links** (not @ syntax)
+   ```markdown
+   See [docs/domain-model.md](docs/domain-model.md) for details.
+   ```
+
+3. **Use discovery commands** instead of importing
+   ```markdown
+   **Discovery:**
+   ```bash
+   grep -r "@Entity" src/main/java
+   ```
+   ```
+
+4. **Leverage hierarchical CLAUDE.md files**
+   - Put general patterns in root CLAUDE.md
+   - Put specific context in subdirectory CLAUDE.md files
+
+5. **Provide "when to consult" guidance**
+   - Tell Claude WHEN to read files
+   - Don't import the files themselves
 
 ### Token Efficiency Benefits
 
@@ -126,11 +199,11 @@ This provides a **pointer** to the documentation without loading it. Claude read
 - ✅ "When to consult" guidance (pointers to detailed docs)
 
 **What to Reference (Not Import):**
-- 📄 Detailed examples (`@docs/examples.md`)
-- 📄 API specifications (`@docs/api/openapi.yaml`)
-- 📄 Code snippets (`@docs/snippets.md`)
-- 📄 Historical context (`@docs/decisions/*.md`)
-- 📄 Comprehensive guides (`@docs/guides/*.md`)
+- 📄 Detailed examples (docs/examples.md)
+- 📄 API specifications (docs/api/openapi.yaml)
+- 📄 Code snippets (docs/snippets.md)
+- 📄 Historical context (docs/decisions/*.md)
+- 📄 Comprehensive guides (docs/guides/*.md)
 
 **Target Metrics:**
 - CLAUDE.md files: < 5,000 tokens (~150-200 lines)
@@ -142,7 +215,7 @@ This provides a **pointer** to the documentation without loading it. Claude read
 **Our pattern-based approach naturally enables just-in-time loading:**
 
 1. **Discovery commands** teach Claude how to find current state (no loading needed)
-2. **Reference patterns** (`See @docs/file.md`) provide pointers, not imports
+2. **Plain text references** (NO @ syntax) provide pointers without pre-loading
 3. **Thin CLAUDE.md files** minimize initial context
 4. **Hierarchical structure** loads service-specific docs only when working in that service
 5. **"When to consult" guidance** tells Claude when to read detailed docs
@@ -150,7 +223,7 @@ This provides a **pointer** to the documentation without loading it. Claude read
 **Example from this plan:**
 ```markdown
 ### API Routes
-**Current Routes**: See @nginx/nginx.dev.conf (source of truth)
+**Current Routes**: See nginx/nginx.dev.conf (source of truth)
 
 **Discovery:**
 ```bash
@@ -158,12 +231,12 @@ cat nginx/nginx.dev.conf | grep "location /api"
 ```
 
 **When to consult nginx.dev.conf**:
-- Adding new API routes → Read @nginx/nginx.dev.conf
-- Understanding routing patterns → Read @nginx/nginx.dev.conf
-- Troubleshooting gateway issues → Read @nginx/README.md
+- Adding new API routes → Read nginx/nginx.dev.conf
+- Understanding routing patterns → Read nginx/nginx.dev.conf
+- Troubleshooting gateway issues → Read nginx/README.md
 ```
 
-This costs ~100 tokens instead of ~2,000 tokens (importing full nginx.dev.conf).
+This costs ~100 tokens instead of ~2,000 tokens (if we imported nginx.dev.conf with @ syntax).
 
 ---
 
@@ -387,11 +460,11 @@ cat nginx/nginx.dev.conf | grep "location /api"
 1. Add service to `docker compose.yml`
 2. Add routes to `nginx/nginx.dev.conf` if frontend-facing
 3. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
-4. See @docs/architecture/service-onboarding.md
+4. See docs/architecture/service-onboarding.md
 
 **See also:**
-- @nginx/README.md - Gateway routing patterns
-- @docs/architecture/system-overview.md - Architecture diagrams
+- nginx/README.md - Gateway routing patterns
+- docs/architecture/system-overview.md - Architecture diagrams
 ```
 
 **Benefits:**
@@ -515,8 +588,8 @@ cat docker compose.yml | grep 'image:' | sort -u
 - Docker images: **Should be pinned** (TODO: pin versions in docker compose.yml)
 
 **See also:**
-- [@service-common/docs/common-dependencies.md](https://github.com/budget-analyzer/service-common/blob/main/docs/common-dependencies.md) - Spring Boot dependency strategy
-- @docs/development/local-environment.md - Setup requirements
+- [service-common/docs/common-dependencies.md](../service-common/docs/common-dependencies.md) - Spring Boot dependency strategy
+- docs/development/local-environment.md - Setup requirements
 ```
 
 **Benefits:**
@@ -593,7 +666,7 @@ scripts/generate-unified-api-docs.sh
 **Note**: Script organization is evolving. Always check actual structure with `tree` or `ls`.
 
 **See also:**
-- @scripts/README.md - Complete script documentation
+- scripts/README.md - Complete script documentation
 ```
 
 **Benefits:**
@@ -745,7 +818,7 @@ find transaction-service/ -name "*Test.java" | head -5
 - Integration tests: `*IntegrationTest.java` (with @SpringBootTest)
 - TestContainers: Used for database/Redis/RabbitMQ in integration tests
 
-**See**: @docs/testing-patterns.md for detailed examples
+**See**: docs/testing-patterns.md for detailed examples
 
 ### Error Handling
 
@@ -754,7 +827,7 @@ find transaction-service/ -name "*Test.java" | head -5
 **Convention**:
 - Custom exceptions extend `BudgetAnalyzerException`
 - Global exception handler in each service
-- Standard error response format (see @docs/error-handling.md)
+- Standard error response format (see docs/error-handling.md)
 
 **Discovery**:
 ```bash
@@ -774,7 +847,7 @@ private static final Logger log = LoggerFactory.getLogger(ClassName.class);
 log.info("Action performed: resource={}, user={}", resourceId, userId);
 ```
 
-**See**: @docs/logging-conventions.md
+**See**: docs/logging-conventions.md
 
 ## Adding to service-common
 
@@ -798,11 +871,11 @@ log.info("Action performed: resource={}, user={}", resourceId, userId);
 ## Documentation References
 
 Detailed patterns documented in `docs/`:
-- @docs/spring-boot-conventions.md - Complete architecture guide
-- @docs/testing-patterns.md - Testing strategies and examples
-- @docs/error-handling.md - Exception handling patterns
-- @docs/logging-conventions.md - Logging best practices
-- @docs/common-dependencies.md - Dependency management details
+- docs/spring-boot-conventions.md - Complete architecture guide
+- docs/testing-patterns.md - Testing strategies and examples
+- docs/error-handling.md - Exception handling patterns
+- docs/logging-conventions.md - Logging best practices
+- docs/common-dependencies.md - Dependency management details
 
 ## AI Assistant Guidelines
 
@@ -810,7 +883,7 @@ When working on Spring Boot services:
 1. **Check service-common first** - Don't reinvent patterns
 2. **Follow naming conventions** - Discover with grep, don't guess
 3. **Never duplicate dependency versions** - Inherit from service-common
-4. **Reference detailed docs** - Don't assume patterns, read @docs/
+4. **Reference detailed docs** - Don't assume patterns, read docs/ files
 5. **Test patterns matter** - Follow established testing conventions
 
 When you see drift between service implementations and these patterns,
@@ -880,7 +953,7 @@ See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-commo
 [Only document patterns UNIQUE to this service]
 
 ### API Contracts
-Full API specification: @docs/api/openapi.yaml
+Full API specification: docs/api/openapi.yaml
 
 **Discovery**:
 ```bash
@@ -893,13 +966,13 @@ cat docs/api/openapi.yaml
 ```
 
 ### Domain Model
-See @docs/domain-model.md for:
+See docs/domain-model.md for:
 - Business entities
 - Aggregate boundaries
 - Domain rules
 
 ### Database Schema
-See @docs/database-schema.md for:
+See docs/database-schema.md for:
 - Table structures
 - Relationships
 - Migration strategy
@@ -920,7 +993,7 @@ docker compose up shared-postgres
 ./mvnw test
 ```
 
-**See**: [@orchestration/docs/development/local-environment.md](https://github.com/budget-analyzer/orchestration/blob/main/docs/development/local-environment.md) for full setup
+**See**: [orchestration/docs/development/local-environment.md](../orchestration/docs/development/local-environment.md) for full setup
 
 ## Discovery Commands
 
@@ -937,10 +1010,10 @@ cat src/main/resources/application.yml
 
 ## AI Assistant Guidelines
 
-1. **Follow service-common patterns** - Reference [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-common/blob/main/CLAUDE.md)
-2. **Check OpenAPI spec first** - See @docs/api/openapi.yaml for endpoints
-3. **Understand domain model** - Read @docs/domain-model.md before changes
-4. **Test everything** - Follow patterns in [@service-common/docs/testing-patterns.md](https://github.com/budget-analyzer/service-common/blob/main/docs/testing-patterns.md)
+1. **Follow service-common patterns** - Reference [service-common/CLAUDE.md](../service-common/CLAUDE.md)
+2. **Check OpenAPI spec first** - See docs/api/openapi.yaml for endpoints
+3. **Understand domain model** - Read docs/domain-model.md before changes
+4. **Test everything** - Follow patterns in [service-common/docs/testing-patterns.md](../service-common/docs/testing-patterns.md)
 5. **Service-specific only** - Don't modify cross-service patterns here
 
 [Add service-specific guidelines if needed]
@@ -949,15 +1022,15 @@ cat src/main/resources/application.yml
 
 **This CLAUDE.md uses just-in-time document loading**:
 - Patterns and conventions are included directly (always relevant)
-- Detailed documentation is referenced with `@path/to/file` pointers
+- Detailed documentation is referenced with plain text pointers (no @ syntax)
 - Discovery commands teach you how to find current state
 - When you need details, read the referenced files on-demand
 
 **When to load detailed docs**:
-- Working on API changes → Read @docs/api/openapi.yaml
-- Adding/modifying entities → Read @docs/domain-model.md
-- Database changes → Read @docs/database-schema.md
-- Service-specific features → Read relevant @docs/*.md files
+- Working on API changes → Read docs/api/openapi.yaml
+- Adding/modifying entities → Read docs/domain-model.md
+- Database changes → Read docs/database-schema.md
+- Service-specific features → Read relevant docs/*.md files
 
 **Token efficiency**: This pattern keeps initial context under 2,000 tokens, saving 75%+ compared to full inclusion.
 ```
@@ -992,7 +1065,7 @@ See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-commo
 ## Service-Specific Patterns
 
 ### API Contracts
-Full API specification: @docs/api/openapi.yaml
+Full API specification: docs/api/openapi.yaml
 
 **Key endpoints** (see OpenAPI spec for details):
 - Transaction CRUD: `/api/v1/transactions/**`
@@ -1010,7 +1083,7 @@ open http://localhost:8082/swagger-ui.html
 ```
 
 ### Domain Model
-See @docs/domain-model.md for detailed entity relationships.
+See docs/domain-model.md for detailed entity relationships.
 
 **Key aggregates**:
 - Transaction (root entity with line items)
@@ -1018,7 +1091,7 @@ See @docs/domain-model.md for detailed entity relationships.
 - Category (hierarchical structure)
 
 ### Database Schema
-See @docs/database-schema.md
+See docs/database-schema.md
 
 **Key tables**:
 - `transactions` (financial transactions)
@@ -1030,7 +1103,7 @@ See @docs/database-schema.md
 ### Transaction Import Feature
 **Unique to this service**: Bulk CSV/OFX import handling
 
-See @docs/import-processing.md for:
+See docs/import-processing.md for:
 - Supported file formats
 - Parsing strategies
 - Deduplication logic
@@ -1065,9 +1138,9 @@ cat src/main/resources/application.yml
 
 ## AI Assistant Guidelines
 
-1. **Follow service-common patterns** - See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-common/blob/main/CLAUDE.md)
-2. **Transaction domain complexity** - Read @docs/domain-model.md before changes
-3. **Import feature** - See @docs/import-processing.md for bulk import logic
+1. **Follow service-common patterns** - See [service-common/CLAUDE.md](../service-common/CLAUDE.md)
+2. **Transaction domain complexity** - Read docs/domain-model.md before changes
+3. **Import feature** - See docs/import-processing.md for bulk import logic
 4. **Database changes** - Create Flyway migrations, never alter schema directly
 5. **Testing transactions** - Use TestContainers for database tests (see service-common)
 ```
@@ -1798,7 +1871,7 @@ See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-commo
 ## Service-Specific Patterns
 
 ### API Contracts
-Full API specification: @docs/api/openapi.yaml
+Full API specification: docs/api/openapi.yaml
 
 **Discovery**:
 ```bash
@@ -1811,7 +1884,7 @@ cat docs/api/openapi.yaml
 ```
 
 ### Domain Model
-See @docs/domain-model.md
+See docs/domain-model.md
 
 **Key concepts**:
 - {Entity 1}: {Brief description}
@@ -1819,7 +1892,7 @@ See @docs/domain-model.md
 
 ### Database Schema
 {If applicable}
-See @docs/database-schema.md
+See docs/database-schema.md
 
 **Key tables**:
 - `{table_name}`: {Brief description}
@@ -1829,7 +1902,7 @@ See @docs/database-schema.md
 ### {Service-Specific Feature}
 {If applicable - document unique concerns only}
 
-See @docs/{feature-name}.md
+See docs/{feature-name}.md
 
 ## Running Locally
 
@@ -1846,7 +1919,7 @@ cd {service-name}/
 curl http://localhost:{PORT}/actuator/health
 ```
 
-**See**: [@orchestration/docs/development/local-environment.md](https://github.com/budget-analyzer/orchestration/blob/main/docs/development/local-environment.md)
+**See**: [orchestration/docs/development/local-environment.md](../orchestration/docs/development/local-environment.md)
 
 ## Discovery Commands
 
@@ -1863,10 +1936,10 @@ cat src/main/resources/application.yml
 
 ## AI Assistant Guidelines
 
-1. **Follow service-common patterns** - See [@service-common/CLAUDE.md](https://github.com/budget-analyzer/service-common/blob/main/CLAUDE.md)
-2. **Check OpenAPI spec first** - See @docs/api/openapi.yaml
-3. **Understand domain** - Read @docs/domain-model.md before changes
-4. **Test everything** - Follow @service-common/docs/testing-patterns.md
+1. **Follow service-common patterns** - See [service-common/CLAUDE.md](../service-common/CLAUDE.md)
+2. **Check OpenAPI spec first** - See docs/api/openapi.yaml
+3. **Understand domain** - Read docs/domain-model.md before changes
+4. **Test everything** - Follow [service-common/docs/testing-patterns.md](../service-common/docs/testing-patterns.md)
 5. {Service-specific guideline}
 ```
 
@@ -1943,13 +2016,13 @@ find src/components -name "*.jsx" -o -name "*.tsx"
 
 {Describe state management approach}
 
-See @docs/state-management.md
+See docs/state-management.md
 
 ### Routing
 
 {Describe routing strategy}
 
-See @docs/routing.md
+See docs/routing.md
 
 ## Running Locally
 
@@ -1964,7 +2037,7 @@ npm start
 open http://localhost:3000
 ```
 
-**Note**: Backend services must be running (see [@orchestration/docs/development/local-environment.md](https://github.com/budget-analyzer/orchestration/blob/main/docs/development/local-environment.md))
+**Note**: Backend services must be running (see [orchestration/docs/development/local-environment.md](../orchestration/docs/development/local-environment.md))
 
 ## Building
 
@@ -1993,7 +2066,7 @@ npm run build && npx webpack-bundle-analyzer build/stats.json
 
 1. **Follow React best practices** - {Link to team conventions}
 2. **API calls through gateway** - Always use `/api/*` paths
-3. **Component patterns** - See @docs/component-patterns.md
+3. **Component patterns** - See docs/component-patterns.md
 4. **Testing** - {Testing strategy}
 5. {Frontend-specific guideline}
 ```
@@ -2151,11 +2224,12 @@ Thanks!
 ### Q: Why not just keep CLAUDE.md comprehensive and detailed?
 **A:** Comprehensive documentation drifts quickly. Pattern-based docs teach AI to discover current state, which is always accurate. Additionally, comprehensive docs waste tokens - loading 500 lines of detailed docs costs ~8,000 tokens per conversation, even when only 10% is relevant.
 
-### Q: What's the difference between @import and @reference?
+### Q: What's the difference between @ syntax and plain text references?
 **A:**
-- **@import** (bare `@docs/file.md` in CLAUDE.md): Loads file content at startup. Use sparingly.
-- **@reference** ("See @docs/file.md" with context): Provides a pointer for just-in-time loading. Claude reads it only when needed.
-- **Best practice**: Use reference patterns with "When to consult" guidance.
+- **@ syntax** (`@docs/file.md` in CLAUDE.md): **Pre-loads file content at startup**. High token cost. Avoid in CLAUDE.md files.
+- **Plain text reference** ("See docs/file.md"): Provides a pointer WITHOUT pre-loading. Claude reads it only when needed.
+- **Markdown link** (`[docs/file.md](docs/file.md)`): Also provides pointer without pre-loading.
+- **Best practice**: Use plain text or markdown links with "When to consult" guidance. Never use @ syntax for file references in CLAUDE.md.
 
 ### Q: What if discovery commands break?
 **A:** The validation script (`scripts/validate-claude-context.sh`) catches this. Fix the command or update the pattern.
@@ -2170,7 +2244,7 @@ Thanks!
 **A:** Ask: "If I refactor, do I need to update this?" If yes, it's too specific. Use a pattern instead. Also check: "Is this over 5,000 tokens?" If yes, it's too detailed.
 
 ### Q: Where do code examples go?
-**A:** In `docs/` directories with full examples. CLAUDE.md references them with @docs/file.md and "When to consult" guidance.
+**A:** In `docs/` directories with full examples. CLAUDE.md references them with plain text (docs/file.md) and "When to consult" guidance.
 
 ### Q: What if a pattern evolves?
 **A:** Update service-common/docs/ (the source of truth), then all services inherit the change. Document the evolution in CHANGELOG.md.
@@ -2271,7 +2345,7 @@ docker compose ps
 - Moving resources = NGINX config change only
 - Clean RESTful paths with versioning (`/api/v1/...`)
 
-**Current routes**: See @nginx/nginx.dev.conf (source of truth)
+**Current routes**: See nginx/nginx.dev.conf (source of truth)
 
 **Discovery**:
 ```bash
@@ -2282,7 +2356,7 @@ cat nginx/nginx.dev.conf | grep "location /api" | grep -v "#"
 curl -v http://localhost:8080/api/v1/health
 ```
 
-**See**: @docs/architecture/resource-routing-pattern.md
+**See**: docs/architecture/resource-routing-pattern.md
 
 ### Technology Stack
 
@@ -2308,8 +2382,8 @@ docker compose config | grep 'image:' | sort -u
 - Services: Inherit versions, never override
 
 **See**:
-- [@service-common/docs/common-dependencies.md](https://github.com/budget-analyzer/service-common/blob/main/docs/common-dependencies.md)
-- @docs/development/local-environment.md
+- [service-common/docs/common-dependencies.md](../service-common/docs/common-dependencies.md)
+- docs/development/local-environment.md
 ```
 
 **Line count**:
