@@ -98,7 +98,7 @@ curl http://localhost:8082/actuator/health  # transaction-service
 curl http://localhost:8084/actuator/health  # currency-service
 
 # Open frontend
-open http://localhost:3000
+open http://localhost:8080
 ```
 
 ## Service-by-Service Setup
@@ -152,7 +152,7 @@ npm install
 npm start
 ```
 
-**Frontend will be available at:** http://localhost:3000
+**Frontend will be available at:** http://localhost:8080 (served through NGINX gateway)
 
 ## Development Workflows
 
@@ -252,23 +252,23 @@ Host: localhost
 Port: 5432
 Database: budget_analyzer
 User: budget_analyzer
-Password: budget_analyzer_dev_password
+Password: budget_analyzer
 
 # Connection string
-postgresql://budget_analyzer:budget_analyzer_dev_password@localhost:5432/budget_analyzer
+postgresql://budget_analyzer:budget_analyzer@localhost:5432/budget_analyzer
 ```
 
 ## Port Reference
 
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend (React) | 3000 | http://localhost:3000 |
-| API Gateway (NGINX) | 8080 | http://localhost:8080 |
-| transaction-service | 8082 | http://localhost:8082 |
-| currency-service | 8084 | http://localhost:8084 |
-| PostgreSQL | 5432 | localhost:5432 |
-| Redis | 6379 | localhost:6379 |
-| RabbitMQ Management | 15672 | http://localhost:15672 |
+| Service | Port | URL | Notes |
+|---------|------|-----|-------|
+| API Gateway (NGINX) | 8080 | http://localhost:8080 | **Primary access point** |
+| Frontend (React dev server) | 3000 | - | Served through gateway on 8080 |
+| transaction-service | 8082 | http://localhost:8082 | Direct access for development/debugging |
+| currency-service | 8084 | http://localhost:8084 | Direct access for development/debugging |
+| PostgreSQL | 5432 | localhost:5432 | Database access |
+| Redis | 6379 | localhost:6379 | Cache access |
+| RabbitMQ Management | 15672 | http://localhost:15672 | Management UI |
 
 ## Environment Variables
 
@@ -281,7 +281,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/budget_analyzer
     username: budget_analyzer
-    password: budget_analyzer_dev_password
+    password: budget_analyzer
 
   redis:
     host: localhost
@@ -404,7 +404,7 @@ curl -X POST http://localhost:8084/admin/seed-currencies
 Located in: `transaction-service/src/test/resources/csv-samples/`
 
 **Upload via frontend:**
-1. Go to http://localhost:3000
+1. Go to http://localhost:8080
 2. Click "Import"
 3. Select CSV file
 4. Choose bank format

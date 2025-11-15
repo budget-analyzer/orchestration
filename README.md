@@ -27,6 +27,8 @@ The application follows a microservices architecture:
 - JDK 24 (for local Spring Boot development)
 - Node.js 18+ (for local React development)
 
+**First-time setup**: See [docs/development/getting-started.md](docs/development/getting-started.md)
+
 ### Running the Application
 
 ```bash
