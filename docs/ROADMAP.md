@@ -65,11 +65,8 @@ This document outlines planned features and enhancements across the Budget Analy
 
 ### Planned
 
-#### 🚨 HIGH PRIORITY - Testing & Quality (CRITICAL - Zero tests currently exist!)
-- [ ] **Add comprehensive integration tests** - Controller, service, and repository layer tests; currently only smoke test exists
-- [ ] **Migrate to Testcontainers for integration tests** - Replace H2 with PostgreSQL/Redis test containers for realistic integration testing
-- [ ] **Add PostgreSQL partial indexes after Testcontainers migration** - Replace full indexes with partial indexes (e.g., `WHERE completion_date IS NULL` for event_publication table)
-- [ ] **Add WireMock for external API testing** - Mock FRED API responses for reliable external integration tests
+#### 🚨 HIGH PRIORITY - Testing & Quality
+_(All critical testing items completed as of 2025-11-15)_
 
 #### MEDIUM PRIORITY - Observability
 - [ ] **Complete Prometheus metrics setup** - Configure Prometheus endpoint exposure; Micrometer instrumentation already present in scheduler
@@ -156,6 +153,12 @@ This document outlines planned features and enhancements across the Budget Analy
 
 ### Service-Common
 - [x] **Add integration tests** - Test Spring Boot integration and component scanning (Completed: 2025-11-11)
+
+### Currency Service
+- [x] **Add comprehensive integration tests** - Controller, service, and repository layer tests (Completed: 2025-11-15)
+- [x] **Migrate to Testcontainers for integration tests** - Replace H2 with PostgreSQL/Redis test containers for realistic integration testing (Completed: 2025-11-15)
+- [x] **Add PostgreSQL partial indexes after Testcontainers migration** - Replace full indexes with partial indexes (e.g., `WHERE completion_date IS NULL` for event_publication table) (Completed: 2025-11-15)
+- [x] **Add WireMock for external API testing** - Mock FRED API responses for reliable external integration tests (Completed: 2025-11-15)
 
 _Items moved here when implemented_
 
