@@ -10,6 +10,7 @@ A single Docker container that provides a consistent development environment for
 - Switch between projects instantly without rebuilding containers
 - Have Claude Code work seamlessly across the entire codebase in VS Code
 - Maintain consistent development environments
+- Sandbox Claude Code file access on the host
 
 ## Directory Structure
 ```
@@ -97,9 +98,9 @@ Both windows share the same container and tools but focus on different projects.
 ### Container User
 
 - User: `vscode`
-- UID: 1002
-- GID: 1002
-- Matches your host user to prevent permission issues
+- UID: 1001
+- GID: 1001
+- Setup automatically detects and matches your host user to prevent permission issues
 
 ### Mounted Directories
 
