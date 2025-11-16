@@ -116,7 +116,7 @@ Use this checklist when creating a new Spring Boot microservice for the Budget A
 
 ```bash
 # Clone template (if exists)
-git clone https://github.com/budget-analyzer/service-template.git {service-name}
+git clone https://github.com/budgetanalyzer/service-template.git {service-name}
 cd {service-name}
 
 # Or start from scratch

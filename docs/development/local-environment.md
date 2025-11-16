@@ -48,13 +48,13 @@ mkdir -p ~/workspace/budget-analyzer
 cd ~/workspace/budget-analyzer
 
 # Clone orchestration (required)
-git clone https://github.com/budget-analyzer/orchestration.git
+git clone https://github.com/budgetanalyzer/orchestration.git
 
 # Clone services (as needed)
-git clone https://github.com/budget-analyzer/service-common.git
-git clone https://github.com/budget-analyzer/transaction-service.git
-git clone https://github.com/budget-analyzer/currency-service.git
-git clone https://github.com/budget-analyzer/budget-analyzer-web.git
+git clone https://github.com/budgetanalyzer/service-common.git
+git clone https://github.com/budgetanalyzer/transaction-service.git
+git clone https://github.com/budgetanalyzer/currency-service.git
+git clone https://github.com/budgetanalyzer/budget-analyzer-web.git
 ```
 
 **Repository structure:**

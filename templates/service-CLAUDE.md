@@ -101,5 +101,5 @@ cat src/main/resources/application.yml
 
 *The relative paths in this document are optimized for Claude Code. When viewing on GitHub, use these links:*
 
-- [Service-Common Documentation](https://github.com/budget-analyzer/service-common/tree/main/docs)
-- [Orchestration Documentation](https://github.com/budget-analyzer/orchestration/tree/main/docs)
+- [Service-Common Documentation](https://github.com/budgetanalyzer/service-common/tree/main/docs)
+- [Orchestration Documentation](https://github.com/budgetanalyzer/orchestration/tree/main/docs)

@@ -126,5 +126,5 @@ npm run build && npx webpack-bundle-analyzer build/stats.json
 
 *The relative paths in this document are optimized for Claude Code. When viewing on GitHub, use these links:*
 
-- [Orchestration Documentation](https://github.com/budget-analyzer/orchestration/tree/main/docs)
-- [NGINX Gateway Configuration](https://github.com/budget-analyzer/orchestration/tree/main/nginx)
+- [Orchestration Documentation](https://github.com/budgetanalyzer/orchestration/tree/main/docs)
+- [NGINX Gateway Configuration](https://github.com/budgetanalyzer/orchestration/tree/main/nginx)

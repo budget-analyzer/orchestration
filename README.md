@@ -67,10 +67,10 @@ orchestration/
 
 Each microservice is maintained in its own repository:
 
-- **service-common**: https://github.com/budget-analyzer/service-common
-- **transaction-service**: https://github.com/budget-analyzer/transaction-service
-- **currency-service**: https://github.com/budget-analyzer/currency-service
-- **budget-analyzer-web**: https://github.com/budget-analyzer/budget-analyzer-web
+- **service-common**: https://github.com/budgetanalyzer/service-common
+- **transaction-service**: https://github.com/budgetanalyzer/transaction-service
+- **currency-service**: https://github.com/budgetanalyzer/currency-service
+- **budget-analyzer-web**: https://github.com/budgetanalyzer/budget-analyzer-web
 
 ## Development
 
