@@ -12,85 +12,256 @@ This plan outlines the creation of a standardized Spring Boot microservice templ
 
 ## Decision Points
 
-### 1. Service-Common Dependency Strategy: compileOnly vs implementation
+### 1. Service-Common Module Split Strategy
 
-**Decision**: To be evaluated during implementation
+**Decision**: CONFIRMED - Split service-common into multi-module monorepo
 
-**Current State**:
-- service-common uses `implementation` for Web, JPA, OpenCSV, SpringDoc
-- All consuming services inherit these dependencies transitively
-- Forces all services to be web services with JPA, even if not needed
+**Final Decision**:
+- **Monorepo structure** with 2 modules: `service-core` and `service-web`
+- Parent project remains `service-common`
+- Modules use `api()` dependencies for implicit transitive dependencies (simpler consuming services)
+- CSV parsing refactored to remove Spring Web dependency from core
 
-**Options**:
+**Rationale**:
+1. **Future flexibility**: Will support non-web services (CLI tools, batch processors, message consumers)
+2. **Clear separation**: Core utilities vs web-specific components
+3. **Developer preference**: Implicit dependencies via `api()` keeps service build files simple
+4. **Monorepo benefits**: Atomic changes, shared tooling, coordinated releases
+5. **Current impact minimal**: Both existing services use both modules, so minimal migration pain
 
-**Option A: Use `compileOnly` (Services Opt-In)**
+---
+
+#### Module Structure
+
+```
+service-common/                           (parent/root project)
+├── settings.gradle.kts                   (defines subprojects)
+├── build.gradle.kts                      (root config, shared settings)
+├── gradle/
+│   └── libs.versions.toml                (shared version catalog)
+├── service-core/                         (NEW - minimal foundation)
+│   ├── build.gradle.kts
+│   └── src/
+│       └── main/java/org/budgetanalyzer/
+│           ├── core/
+│           │   └── logging/              (SafeLogger, Sensitive, etc.)
+│           └── service/                  (TODO: rename to 'web' in Phase 2)
+│               └── exception/            (all exception classes)
+└── service-web/                          (NEW - Spring Boot web components)
+    ├── build.gradle.kts
+    └── src/
+        └── main/java/org/budgetanalyzer/
+            ├── core/
+            │   ├── csv/                  (CSV parsing - after refactor)
+            │   ├── domain/               (JPA entities)
+            │   └── repository/           (JPA repositories)
+            └── service/                  (TODO: rename to 'web' in Phase 2)
+                ├── api/                  (API error handling)
+                ├── http/                 (HTTP filters)
+                └── config/               (OpenAPI config)
+```
+
+---
+
+#### service-core Module
+
+**Purpose**: Foundation-level utilities with minimal dependencies. Reusable across any application type (web services, CLI tools, batch jobs).
+
+**Contents**:
+- `org.budgetanalyzer.core.logging.*` - SafeLogger, Sensitive annotation, SensitiveDataModule
+- `org.budgetanalyzer.service.exception.*` - All exception classes (pure POJOs)
+
+**Dependencies**:
 ```kotlin
-// service-common/build.gradle.kts
 dependencies {
-    compileOnly(libs.spring.boot.starter.web)
-    compileOnly(libs.spring.boot.starter.data.jpa)
-    compileOnly(libs.opencsv)
-    compileOnly(libs.springdoc.openapi)
+    api("com.fasterxml.jackson.core:jackson-databind")
+    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    api("org.slf4j:slf4j-api")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 ```
 
-**Pros**:
-- Maximum flexibility - services only get what they need
-- True minimal baseline (e.g., read-only services might not need JPA)
-- No forced dependencies
+**Use Cases**:
+- CLI tools (only need logging and exceptions)
+- Batch jobs (minimal Spring Boot, no web)
+- Web services (via service-web dependency)
 
-**Cons**:
-- Services must explicitly declare dependencies
-- More verbose service build files
-- Potential for missing dependencies
+---
 
-**Option B: Use `implementation` (Current State)**
+#### service-web Module
+
+**Purpose**: Spring Boot web service components with auto-configuration. Includes all web-specific, JPA, and service infrastructure.
+
+**Contents**:
+- `org.budgetanalyzer.core.csv.*` - CSV parsing (refactored to use InputStream)
+- `org.budgetanalyzer.core.domain.*` - JPA base entities (AuditableEntity, SoftDeletableEntity)
+- `org.budgetanalyzer.core.repository.*` - Repository interfaces (SoftDeleteOperations)
+- `org.budgetanalyzer.service.api.*` - API error responses and handlers
+- `org.budgetanalyzer.service.http.*` - HTTP filters and logging
+- `org.budgetanalyzer.service.config.*` - OpenAPI configuration
+
+**Dependencies**:
 ```kotlin
-// service-common/build.gradle.kts
+plugins {
+    alias(libs.plugins.spring.dependency.management)
+}
+
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.boot:spring-boot-dependencies:${libs.versions.springBoot.get()}")
+    }
+}
+
 dependencies {
-    implementation(libs.spring.boot.starter.web)
-    implementation(libs.spring.boot.starter.data.jpa)
+    // Core module dependency (transitive to consumers via api())
+    api(project(":service-core"))
+
+    // Spring Boot (use api() for implicit dependencies)
+    api("org.springframework.boot:spring-boot-starter-web")
+    api("org.springframework.boot:spring-boot-starter-data-jpa")
+
+    // Third-party
+    implementation("com.opencsv:opencsv")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui")
+    implementation("org.apache.commons:commons-lang3")
+
+    // Test
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("com.h2database:h2")
 }
 ```
 
-**Pros**:
-- Less duplication in service build files
-- Services automatically get common dependencies
-- Simpler for developers
+**Use Cases**:
+- Spring Boot REST API microservices
+- Services with JPA persistence
+- Services with CSV upload capabilities
 
-**Cons**:
-- Forces dependencies on all services
-- Not all services are web services (e.g., batch processors)
-- Cannot create truly minimal services
+---
 
-**Option C: Hybrid Approach**
+#### Consuming Service Impact
+
+**REST API Services** (transaction-service, currency-service):
 ```kotlin
-// service-common/build.gradle.kts
-dependencies {
-    // Core autoconfiguration dependencies (all services need)
-    implementation(libs.spring.boot.starter.actuator)
+// BEFORE (current):
+implementation("org.budgetanalyzer:service-common:0.0.1-SNAPSHOT")
 
-    // Optional dependencies (services opt-in)
-    compileOnly(libs.spring.boot.starter.web)
-    compileOnly(libs.spring.boot.starter.data.jpa)
-    compileOnly(libs.opencsv)
-    compileOnly(libs.springdoc.openapi)
-}
+// AFTER (module split):
+implementation("org.budgetanalyzer:service-web:0.0.1-SNAPSHOT")
+// Automatically includes service-core via transitive dependency
+// Automatically includes Spring Boot Web + JPA via api() dependencies
 ```
 
-**Pros**:
-- Balance between convenience and flexibility
-- Actuator always available (needed for health checks)
-- Services choose Web/JPA
+**CLI/Batch Services** (future):
+```kotlin
+// Only need core utilities:
+implementation("org.budgetanalyzer:service-core:0.0.1-SNAPSHOT")
+// Gets: Jackson, SLF4J, exceptions, logging utilities
+// Does NOT get: Spring Web, JPA, OpenCSV, SpringDoc
+```
 
-**Cons**:
-- More complex mental model
-- Need to document which are implementation vs compileOnly
+---
 
-**Recommendation**: Evaluate during Phase 1 by:
-1. Testing Option A with existing services
-2. Measuring impact on service build files
-3. Deciding based on actual developer experience
+#### CSV Parsing Refactor
+
+**Problem**: Current `CsvParser` interface uses `MultipartFile` from Spring Web, forcing web dependency on core.
+
+**Solution**: Remove Spring Web dependency by refactoring to use `InputStream`.
+
+**Changes**:
+
+1. **Remove convenience method from CsvParser interface**:
+   ```java
+   // BEFORE:
+   public interface CsvParser {
+     CsvData parseCsvInputStream(InputStream inputStream, String fileName, String format) throws IOException;
+     default CsvData parseCsvFile(MultipartFile file, String format) throws IOException { ... }
+   }
+
+   // AFTER:
+   public interface CsvParser {
+     CsvData parseCsvInputStream(InputStream inputStream, String fileName, String format) throws IOException;
+   }
+   ```
+
+2. **Update consuming code** (TransactionImportService.java):
+   ```java
+   // BEFORE:
+   var csvData = csvParser.parseCsvFile(file, format);
+
+   // AFTER:
+   var csvData = csvParser.parseCsvInputStream(
+       file.getInputStream(),       // Extract InputStream
+       file.getOriginalFilename(),  // Extract filename
+       format
+   );
+   ```
+
+**Impact**:
+- Only 1 call site needs updating (TransactionImportService.java:66)
+- Change is trivial (extract InputStream and filename from MultipartFile)
+- Core parsing logic already uses InputStream (no changes needed)
+- Eliminates Spring Web dependency from service-core
+
+---
+
+#### Package Naming Strategy
+
+**Phase 1** (Current Implementation - NOW):
+- Keep package names as-is: `org.budgetanalyzer.service.exception.*`
+- Focus on module split, not package renames
+- Minimize scope of changes
+
+**Phase 2** (Future Refactoring - LATER):
+- Rename `service` packages to `web` for clarity:
+  - `org.budgetanalyzer.service.exception.*` → `org.budgetanalyzer.web.exception.*`
+  - `org.budgetanalyzer.service.api.*` → `org.budgetanalyzer.web.api.*`
+  - `org.budgetanalyzer.service.http.*` → `org.budgetanalyzer.web.http.*`
+  - `org.budgetanalyzer.service.config.*` → `org.budgetanalyzer.web.config.*`
+
+**Rationale**: One step at a time - complete module split first, refine naming later.
+
+---
+
+#### Why Monorepo Over Multi-Repo?
+
+**Monorepo Advantages** (chosen approach):
+- ✅ Shared Gradle configuration (version catalogs, plugins, checkstyle, spotless)
+- ✅ Single version for both modules (coordinated releases)
+- ✅ Atomic commits across modules (change both in one PR)
+- ✅ Easier refactoring between modules
+- ✅ Single CI/CD pipeline
+- ✅ Faster development (no cross-repo coordination)
+
+**Multi-Repo Disadvantages** (not chosen):
+- ❌ Must duplicate tooling config (checkstyle, spotless, etc.)
+- ❌ Cross-repo changes require multiple PRs
+- ❌ Version coordination overhead
+- ❌ Two CI pipelines to maintain
+
+**Conclusion**: Modules are tightly coupled and evolve together, making monorepo the better choice.
+
+---
+
+#### Version Catalog Updates
+
+**Add to libs.versions.toml** (in consuming services):
+```toml
+[libraries]
+service-core = { module = "org.budgetanalyzer:service-core", version = "0.0.1-SNAPSHOT" }
+service-web = { module = "org.budgetanalyzer:service-web", version = "0.0.1-SNAPSHOT" }
+```
+
+**Usage in consuming services**:
+```kotlin
+// For REST API services (most common):
+implementation(libs.service.web)
+
+// For CLI/batch services (future):
+implementation(libs.service.core)
+```
 
 ---
 
@@ -150,6 +321,261 @@ budget-analyzer/spring-boot-service-template/
 ---
 
 ## Implementation Phases
+
+### Phase 0: Service-Common Module Split
+
+**Duration**: 2-3 days
+
+**Purpose**: Split the monolithic service-common into service-core and service-web modules to support both web services and non-web applications (CLI, batch).
+
+**Tasks**:
+
+1. **CSV Parser Refactoring** (Remove Spring Web Dependency)
+   - Remove `parseCsvFile(MultipartFile)` method from `CsvParser` interface
+   - Remove MultipartFile override from `OpenCsvParser` implementation
+   - Update transaction-service `TransactionImportService` to use `parseCsvInputStream()`
+   - Update `OpenCsvParserTest` to remove MockMultipartFile test
+   - Verify CSV parsing still works with InputStream-based API
+
+2. **Create Multi-Module Structure**
+
+   **Root configuration**:
+   - Create `service-common/settings.gradle.kts`:
+     ```kotlin
+     rootProject.name = "service-common"
+     include("service-core")
+     include("service-web")
+     ```
+
+   - Update `service-common/build.gradle.kts` as root project:
+     ```kotlin
+     plugins {
+         java
+         checkstyle
+         alias(libs.plugins.spotless) apply false
+     }
+
+     allprojects {
+         group = "org.budgetanalyzer"
+         version = "0.0.1-SNAPSHOT"
+         repositories {
+             mavenCentral()
+         }
+     }
+
+     subprojects {
+         apply(plugin: "java")
+         apply(plugin: "checkstyle")
+         apply(plugin: "maven-publish")
+         apply(plugin: "com.diffplug.spotless")
+
+         java {
+             toolchain {
+                 languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInt())
+             }
+             withSourcesJar()
+             withJavadocJar()
+         }
+
+         tasks.withType<Test> {
+             useJUnitPlatform()
+         }
+
+         // Shared spotless and checkstyle configuration
+         configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+             java {
+                 googleJavaFormat(libs.versions.googleJavaFormat.get())
+                 trimTrailingWhitespace()
+                 endWithNewline()
+                 importOrder("java", "javax", "jakarta", "org", "com", "", "org.budgetanalyzer")
+                 removeUnusedImports()
+             }
+         }
+
+         configure<CheckstyleExtension> {
+             toolVersion = libs.versions.checkstyle.get()
+         }
+
+         tasks.named("check") {
+             dependsOn("spotlessCheck")
+         }
+
+         // Publishing configuration
+         configure<PublishingExtension> {
+             publications {
+                 create<MavenPublication>("mavenJava") {
+                     from(components["java"])
+                     groupId = project.group.toString()
+                     artifactId = project.name
+                     version = project.version.toString()
+                 }
+             }
+             repositories {
+                 mavenLocal()
+             }
+         }
+     }
+     ```
+
+3. **Create service-core Module**
+
+   **Directory structure**:
+   ```
+   service-core/
+   ├── build.gradle.kts
+   └── src/
+       ├── main/java/org/budgetanalyzer/
+       │   ├── core/
+       │   │   └── logging/        (move from root)
+       │   └── service/
+       │       └── exception/      (move from root)
+       └── test/java/...           (move tests)
+   ```
+
+   **build.gradle.kts**:
+   ```kotlin
+   dependencies {
+       api("com.fasterxml.jackson.core:jackson-databind")
+       api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+       api("org.slf4j:slf4j-api")
+
+       testImplementation("org.springframework.boot:spring-boot-starter-test")
+       testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+   }
+   ```
+
+4. **Create service-web Module**
+
+   **Directory structure**:
+   ```
+   service-web/
+   ├── build.gradle.kts
+   └── src/
+       ├── main/java/org/budgetanalyzer/
+       │   ├── core/
+       │   │   ├── csv/           (move from root)
+       │   │   ├── domain/        (move from root)
+       │   │   └── repository/    (move from root)
+       │   └── service/
+       │       ├── api/           (move from root)
+       │       ├── http/          (move from root)
+       │       └── config/        (move from root)
+       └── test/java/...          (move tests)
+   ```
+
+   **build.gradle.kts**:
+   ```kotlin
+   plugins {
+       alias(libs.plugins.spring.dependency.management)
+   }
+
+   dependencyManagement {
+       imports {
+           mavenBom("org.springframework.boot:spring-boot-dependencies:${libs.versions.springBoot.get()}")
+       }
+   }
+
+   dependencies {
+       // Core module dependency
+       api(project(":service-core"))
+
+       // Spring Boot
+       api("org.springframework.boot:spring-boot-starter-web")
+       api("org.springframework.boot:spring-boot-starter-data-jpa")
+
+       // Third-party
+       implementation("com.opencsv:opencsv:${libs.versions.opencsv.get()}")
+       implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${libs.versions.springdoc.get()}")
+       implementation("org.apache.commons:commons-lang3")
+
+       // Test
+       testImplementation("org.springframework.boot:spring-boot-starter-test")
+       testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+       testRuntimeOnly("com.h2database:h2")
+   }
+   ```
+
+5. **Update Consuming Services**
+
+   **transaction-service/build.gradle.kts**:
+   ```kotlin
+   // BEFORE:
+   implementation(libs.service.common)
+
+   // AFTER:
+   implementation(libs.service.web)
+   ```
+
+   **currency-service/build.gradle.kts**:
+   ```kotlin
+   // BEFORE:
+   implementation(libs.service.common)
+
+   // AFTER:
+   implementation(libs.service.web)
+   ```
+
+   **Update libs.versions.toml** (in each service):
+   ```toml
+   [libraries]
+   # BEFORE:
+   service-common = { module = "org.budgetanalyzer:service-common", version.ref = "serviceCommon" }
+
+   # AFTER:
+   service-core = { module = "org.budgetanalyzer:service-core", version.ref = "serviceCommon" }
+   service-web = { module = "org.budgetanalyzer:service-web", version.ref = "serviceCommon" }
+   ```
+
+6. **Build and Publish**
+   ```bash
+   # Build service-common (both modules)
+   cd /workspace/service-common
+   ./gradlew clean build
+
+   # Publish to Maven Local
+   ./gradlew publishToMavenLocal
+
+   # Build transaction-service
+   cd /workspace/transaction-service
+   ./gradlew clean build
+
+   # Build currency-service
+   cd /workspace/currency-service
+   ./gradlew clean build
+   ```
+
+7. **Testing & Validation**
+   - Run all tests in service-core
+   - Run all tests in service-web
+   - Run all tests in transaction-service
+   - Run all tests in currency-service
+   - Manual test: CSV upload in transaction-service
+   - Verify no runtime errors
+   - Verify autoconfiguration still works
+
+**Deliverables**:
+- ✅ service-common split into service-core and service-web modules
+- ✅ CSV parser refactored to use InputStream (no Spring Web dependency in core)
+- ✅ All consuming services updated and building successfully
+- ✅ All tests passing
+- ✅ Both modules published to Maven Local
+- ✅ No breaking changes to public APIs (except CSV parser method signature)
+
+**Files Modified**:
+- `service-common/src/.../csv/CsvParser.java`
+- `service-common/src/.../csv/impl/OpenCsvParser.java`
+- `service-common/src/test/.../csv/impl/OpenCsvParserTest.java`
+- `transaction-service/src/.../service/TransactionImportService.java`
+- `service-common/build.gradle.kts` (converted to root project)
+- `service-common/settings.gradle.kts` (NEW)
+- `service-core/build.gradle.kts` (NEW)
+- `service-web/build.gradle.kts` (NEW)
+- `transaction-service/build.gradle.kts`
+- `currency-service/build.gradle.kts`
+- `transaction-service/gradle/libs.versions.toml`
+- `currency-service/gradle/libs.versions.toml`
+
+---
 
 ### Phase 1: Service-Common Audit & Standardization
 
@@ -1032,27 +1458,33 @@ Once the template is ready, new servlet-based microservices follow this workflow
 
 ## Timeline
 
-**Total Duration**: 2-3 weeks
+**Total Duration**: 3-4 weeks
 
 ```
 Week 1:
-├── Phase 1: Service-Common Evaluation (2 days)
-├── Phase 2: GitHub Template Creation (3 days)
+├── Phase 0: Service-Common Module Split (2-3 days)
+├── Phase 1: Service-Common Audit & Standardization (1-2 days)
+└── Phase 2: GitHub Template Creation (2-3 days)
 
 Week 2:
 ├── Phase 3: Add-On Documentation (3 days)
-├── Phase 4: Creation Script (2 days)
+└── Phase 4: Creation Script (2 days)
 
 Week 3:
 ├── Phase 4: Script Testing (2 days)
 ├── Phase 5: Documentation (2 days)
-├── Phase 6: Testing & Validation (3 days)
+└── Phase 6: Testing & Validation (2 days)
+
+Week 4:
+├── Phase 6: Testing & Validation (1 day)
 └── Phase 7: Post-Template Development (ongoing)
 ```
 
-**Critical Path**: Phase 1 → Phase 2 → Phase 4 → Phase 6
+**Critical Path**: Phase 0 → Phase 1 → Phase 2 → Phase 4 → Phase 6
 
 **Parallel Work**: Phase 3 can happen alongside Phase 4
+
+**Note**: Phase 0 is a prerequisite for the template system, as it establishes the foundational module structure that the template will depend on.
 
 ---
 
