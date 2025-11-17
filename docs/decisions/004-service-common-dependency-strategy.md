@@ -211,7 +211,3 @@ Subprojects inherit configuration and add module-specific dependencies.
 - [Service-Common Repository](https://github.com/budgetanalyzer/service-common)
 - [Transaction Service](https://github.com/budgetanalyzer/transaction-service)
 - [Currency Service](https://github.com/budgetanalyzer/currency-service)
-
----
-
-**Note**: This decision is a prerequisite for the Spring Boot Microservice Template (Phase 2+), as the template will depend on `service-web` for REST API services.

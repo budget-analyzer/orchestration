@@ -132,31 +132,10 @@ Use environment variable for Java version.
 **Neutral:**
 - 🔷 Per-service versioning (not cross-service)
 - 🔷 Each service can use different Java version if needed (flexibility)
-- 🔷 Template services will include Java version in version catalog
 
 ## Implementation Pattern
 
-### Template Services
-The Spring Boot microservice template includes this pattern:
-
-**`gradle/libs.versions.toml`**:
-```toml
-[versions]
-java = "{JAVA_VERSION}"  # Replaced by creation script
-springBoot = "3.5.7"
-# ... other versions
-```
-
-**`build.gradle.kts`**:
-```kotlin
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInt())
-    }
-}
-```
-
-### Existing Services
+### Services
 Migration for transaction-service and currency-service:
 
 1. Add `java = "24"` to `[versions]` section in `gradle/libs.versions.toml`
@@ -205,8 +184,6 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
 
 ## References
 - [Gradle Version Catalogs Documentation](https://docs.gradle.org/current/userguide/platforms.html)
-- [Appendix A: Java Version Management Strategy](../service-creation/microservice-template-plan.md#appendix-a-java-version-management-strategy)
-- [Service Template Plan - Phase 1](../service-creation/microservice-template-plan.md#phase-1-service-common-audit--standardization)
 
 ---
 
