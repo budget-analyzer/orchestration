@@ -36,9 +36,13 @@ NC='\033[0m' # No Color
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
-TEMPLATE_REPO="https://github.com/budgetanalyzer/spring-boot-service-template.git"
+TEMPLATE_REPO="git@github.com:budgetanalyzer/spring-boot-service-template.git"
 DEFAULT_JAVA_VERSION="24"
 DEFAULT_SERVICE_COMMON_VERSION="0.0.1-SNAPSHOT"
+
+# Template paths
+TEMPLATE_REPO_PATH=""  # Will be set after SERVICE_DIR is determined
+TEMPLATE_ADDONS_PATH=""  # Will be set after TEMPLATE_REPO_PATH
 
 # Service configuration (populated by prompts)
 SERVICE_NAME=""
@@ -51,12 +55,15 @@ SERVICE_COMMON_VERSION=""
 SERVICE_DIR=""
 
 # Add-on flags
+USE_SPRING_BOOT_WEB=false
 USE_POSTGRESQL=false
 USE_REDIS=false
 USE_RABBITMQ=false
 USE_WEBFLUX=false
+USE_SCHEDULING=false
 USE_SHEDLOCK=false
 USE_SPRINGDOC=false
+USE_TESTCONTAINERS=false
 USE_SECURITY=false
 
 # GitHub integration flags
@@ -143,9 +150,9 @@ validate_port() {
 validate_database_name() {
     local name="$1"
 
-    # Allow empty (means shared database)
+    # Must not be empty (each service has its own database)
     if [ -z "$name" ]; then
-        return 0
+        return 1
     fi
 
     # Must be alphanumeric + underscores, start with letter
@@ -260,22 +267,12 @@ prompt_service_details() {
     read -p "service-web version [$DEFAULT_SERVICE_COMMON_VERSION]: " SERVICE_COMMON_VERSION
     SERVICE_COMMON_VERSION=${SERVICE_COMMON_VERSION:-$DEFAULT_SERVICE_COMMON_VERSION}
 
-    # Database name
-    echo ""
-    print_info "PostgreSQL database configuration:"
-    print_info "- Leave empty for shared database 'budget_analyzer'"
-    print_info "- Default: '$DOMAIN_NAME' (dedicated database)"
-    print_info "- Or specify custom database name"
-    read -p "Database name (default: $DOMAIN_NAME): " DATABASE_NAME
-    DATABASE_NAME=${DATABASE_NAME:-$DOMAIN_NAME}
-
-    while ! validate_database_name "$DATABASE_NAME"; do
-        print_error "Invalid database name. Must be lowercase alphanumeric + underscores"
-        read -p "Database name: " DATABASE_NAME
-    done
-
     # Set service directory
     SERVICE_DIR="$WORKSPACE_DIR/../$SERVICE_NAME"
+
+    # Set template paths
+    TEMPLATE_REPO_PATH="$(dirname "$SERVICE_DIR")/spring-boot-service-template"
+    TEMPLATE_ADDONS_PATH="$TEMPLATE_REPO_PATH/addons"
 
     # Summary
     echo ""
@@ -286,7 +283,6 @@ prompt_service_details() {
     echo "Service Port:          $SERVICE_PORT"
     echo "Java Version:          $JAVA_VERSION"
     echo "service-web Version:   $SERVICE_COMMON_VERSION"
-    echo "Database Name:         $DATABASE_NAME"
     echo "Service Directory:     $SERVICE_DIR"
     echo ""
 
@@ -303,6 +299,9 @@ prompt_addons() {
     echo "Select add-ons to include (y/n):"
     echo ""
 
+    read -p "  Spring Boot Web (REST API with embedded Tomcat) [y/n]: " USE_SPRING_BOOT_WEB
+    [[ "$USE_SPRING_BOOT_WEB" =~ ^[Yy]$ ]] && USE_SPRING_BOOT_WEB=true || USE_SPRING_BOOT_WEB=false
+
     read -p "  PostgreSQL + Flyway (database persistence with migrations) [y/n]: " USE_POSTGRESQL
     [[ "$USE_POSTGRESQL" =~ ^[Yy]$ ]] && USE_POSTGRESQL=true || USE_POSTGRESQL=false
 
@@ -315,11 +314,17 @@ prompt_addons() {
     read -p "  WebFlux WebClient (reactive HTTP client) [y/n]: " USE_WEBFLUX
     [[ "$USE_WEBFLUX" =~ ^[Yy]$ ]] && USE_WEBFLUX=true || USE_WEBFLUX=false
 
+    read -p "  Scheduling (@Scheduled tasks) [y/n]: " USE_SCHEDULING
+    [[ "$USE_SCHEDULING" =~ ^[Yy]$ ]] && USE_SCHEDULING=true || USE_SCHEDULING=false
+
     read -p "  ShedLock (distributed scheduled task locking) [y/n]: " USE_SHEDLOCK
     [[ "$USE_SHEDLOCK" =~ ^[Yy]$ ]] && USE_SHEDLOCK=true || USE_SHEDLOCK=false
 
     read -p "  SpringDoc OpenAPI (API documentation) [y/n]: " USE_SPRINGDOC
     [[ "$USE_SPRINGDOC" =~ ^[Yy]$ ]] && USE_SPRINGDOC=true || USE_SPRINGDOC=false
+
+    read -p "  TestContainers (smoke test with real infrastructure) [y/n]: " USE_TESTCONTAINERS
+    [[ "$USE_TESTCONTAINERS" =~ ^[Yy]$ ]] && USE_TESTCONTAINERS=true || USE_TESTCONTAINERS=false
 
     # Spring Security (future)
     # read -p "  Spring Security (authentication and authorization) [y/n]: " USE_SECURITY
@@ -327,13 +332,42 @@ prompt_addons() {
 
     echo ""
     print_section "Selected Add-Ons"
+    $USE_SPRING_BOOT_WEB && echo "  ✓ Spring Boot Web"
     $USE_POSTGRESQL && echo "  ✓ PostgreSQL + Flyway"
     $USE_REDIS && echo "  ✓ Redis"
     $USE_RABBITMQ && echo "  ✓ RabbitMQ + Spring Cloud Stream"
     $USE_WEBFLUX && echo "  ✓ WebFlux WebClient"
+    $USE_SCHEDULING && echo "  ✓ Scheduling"
     $USE_SHEDLOCK && echo "  ✓ ShedLock"
     $USE_SPRINGDOC && echo "  ✓ SpringDoc OpenAPI"
+    $USE_TESTCONTAINERS && echo "  ✓ TestContainers"
     $USE_SECURITY && echo "  ✓ Spring Security"
+    echo ""
+}
+
+prompt_postgresql_config() {
+    # Only prompt for database name if PostgreSQL addon is selected
+    if [ "$USE_POSTGRESQL" = false ]; then
+        DATABASE_NAME=""
+        return
+    fi
+
+    print_section "PostgreSQL Configuration"
+
+    echo ""
+    print_info "PostgreSQL database configuration:"
+    print_info "- Default: '$DOMAIN_NAME' (dedicated database per service)"
+    print_info "- Or specify a custom database name"
+    read -p "Database name (default: $DOMAIN_NAME): " DATABASE_NAME
+    DATABASE_NAME=${DATABASE_NAME:-$DOMAIN_NAME}
+
+    while ! validate_database_name "$DATABASE_NAME"; do
+        print_error "Invalid database name. Must be lowercase alphanumeric + underscores"
+        read -p "Database name: " DATABASE_NAME
+    done
+
+    echo ""
+    echo "Database Name:         $DATABASE_NAME"
     echo ""
 }
 
@@ -428,33 +462,24 @@ replace_placeholders() {
     # Rename directories
     print_info "Renaming package directories..."
 
-    if [ -d "$SERVICE_DIR/src/main/java/org/budgetanalyzer/template" ]; then
-        mv "$SERVICE_DIR/src/main/java/org/budgetanalyzer/template" \
-           "$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME"
-        print_success "Renamed main package directory"
-    fi
+    mv "$SERVICE_DIR/src/main/java/org/budgetanalyzer/{DOMAIN_NAME}" \
+       "$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME"
+    print_success "Renamed main package directory"
 
-    if [ -d "$SERVICE_DIR/src/test/java/org/budgetanalyzer/template" ]; then
-        mv "$SERVICE_DIR/src/test/java/org/budgetanalyzer/template" \
-           "$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME"
-        print_success "Renamed test package directory"
-    fi
+    mv "$SERVICE_DIR/src/test/java/org/budgetanalyzer/{DOMAIN_NAME}" \
+       "$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME"
+    print_success "Renamed test package directory"
 
     # Rename Application class files
     print_info "Renaming Application class files..."
 
-    local main_app="$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/TemplateApplication.java"
-    local test_app="$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME/TemplateApplicationTests.java"
+    mv "$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/{ServiceClassName}Application.java" \
+       "$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}Application.java"
+    print_success "Renamed Application class"
 
-    if [ -f "$main_app" ]; then
-        mv "$main_app" "$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}Application.java"
-        print_success "Renamed Application class"
-    fi
-
-    if [ -f "$test_app" ]; then
-        mv "$test_app" "$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}ApplicationTests.java"
-        print_success "Renamed ApplicationTests class"
-    fi
+    mv "$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME/{ServiceClassName}ApplicationTests.java" \
+       "$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}ApplicationTests.java"
+    print_success "Renamed ApplicationTests class"
 
     echo ""
 }
@@ -463,324 +488,361 @@ replace_placeholders() {
 # Add-On Application
 ################################################################################
 
+################################################################################
+# Template Application Helper Functions
+################################################################################
+
+apply_application_class_patch() {
+    local addon_name=$1
+    local app_file="$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}Application.java"
+
+    if [ ! -f "$app_file" ]; then
+        print_error "Application class not found at: $app_file"
+        print_error "Cannot apply $addon_name patch. Skipping..."
+        return 1
+    fi
+
+    print_info "Removing DataSource exclusions from Application class..."
+
+    # Remove the exclude parameter and closing parenthesis
+    sed -i 's/@SpringBootApplication(/@SpringBootApplication/' "$app_file"
+    sed -i '/exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class})/d' "$app_file"
+
+    # Remove the imports
+    sed -i '/import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;/d' "$app_file"
+    sed -i '/import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;/d' "$app_file"
+}
+
+apply_addon_toml() {
+    local addon_name=$1
+    local addon_toml="$TEMPLATE_ADDONS_PATH/$addon_name/libs.versions.toml"
+
+    if [ -f "$addon_toml" ]; then
+        print_info "Adding $addon_name dependencies to libs.versions.toml..."
+
+        # Handle special case: Spring Boot Web replaces service-core with service-web
+        if [ "$addon_name" = "spring-boot-web" ]; then
+            sed -i 's/service-core/service-web/g' "$SERVICE_DIR/gradle/libs.versions.toml"
+        else
+            cat "$addon_toml" >> "$SERVICE_DIR/gradle/libs.versions.toml"
+        fi
+    fi
+}
+
+apply_addon_gradle() {
+    local addon_name=$1
+    local gradle_file="$SERVICE_DIR/build.gradle.kts"
+
+    # Handle special prepend case (RabbitMQ dependencyManagement)
+    local gradle_prepend="$TEMPLATE_ADDONS_PATH/$addon_name/build.gradle.kts.dependencyManagement"
+    if [ -f "$gradle_prepend" ]; then
+        print_info "Adding $addon_name dependency management to build.gradle.kts..."
+        # Insert before dependencies block
+        sed -i '/^dependencies {$/e cat '"$gradle_prepend" "$gradle_file"
+    fi
+
+    # Handle standard append case (dependencies)
+    local gradle_deps="$TEMPLATE_ADDONS_PATH/$addon_name/build.gradle.kts.dependencies"
+    if [ ! -f "$gradle_deps" ]; then
+        gradle_deps="$TEMPLATE_ADDONS_PATH/$addon_name/build.gradle.kts"
+    fi
+
+    if [ -f "$gradle_deps" ]; then
+        print_info "Adding $addon_name dependencies to build.gradle.kts..."
+        # Find the line with testRuntimeOnly(libs.junit.platform.launcher) and append after it
+        sed -i '/testRuntimeOnly(libs.junit.platform.launcher)/r '"$gradle_deps" "$gradle_file"
+    fi
+}
+
+apply_addon_yaml() {
+    local addon_name=$1
+    local addon_yaml="$TEMPLATE_ADDONS_PATH/$addon_name/application.yml"
+
+    if [ -f "$addon_yaml" ]; then
+        print_info "Adding $addon_name configuration to application.yml..."
+
+        # Create temp file with substitutions
+        local temp_yaml=$(mktemp)
+        sed -e "s/{SERVICE_NAME}/$SERVICE_NAME/g" \
+            -e "s/{DATABASE_NAME}/$DATABASE_NAME/g" \
+            -e "s/{SERVICE_PORT}/$SERVICE_PORT/g" \
+            "$addon_yaml" > "$temp_yaml"
+
+        # Append to application.yml
+        cat "$temp_yaml" >> "$SERVICE_DIR/src/main/resources/application.yml"
+        rm "$temp_yaml"
+    fi
+}
+
+apply_addon_sql() {
+    local addon_name=$1
+    local migration_pattern="$TEMPLATE_ADDONS_PATH/$addon_name/V*.sql"
+
+    for sql_file in $migration_pattern; do
+        if [ -f "$sql_file" ]; then
+            local filename=$(basename "$sql_file")
+            print_info "Copying $filename to db/migration..."
+
+            # Create temp file with substitutions
+            local temp_sql=$(mktemp)
+            sed -e "s/{SERVICE_NAME}/$SERVICE_NAME/g" \
+                -e "s/{DATABASE_NAME}/$DATABASE_NAME/g" \
+                "$sql_file" > "$temp_sql"
+
+            # Copy to migration directory
+            mkdir -p "$SERVICE_DIR/src/main/resources/db/migration"
+            cp "$temp_sql" "$SERVICE_DIR/src/main/resources/db/migration/$filename"
+            rm "$temp_sql"
+        fi
+    done
+}
+
+apply_addon_java_patch() {
+    local addon_name=$1
+    local patch_file="$TEMPLATE_ADDONS_PATH/$addon_name/Application.java.patch"
+
+    if [ -f "$patch_file" ]; then
+        apply_application_class_patch "$addon_name"
+    fi
+}
+
+# Master function to apply all addon templates
+apply_addon_templates() {
+    local addon_name=$1
+
+    apply_addon_toml "$addon_name"
+    apply_addon_gradle "$addon_name"
+    apply_addon_yaml "$addon_name"
+    apply_addon_sql "$addon_name"
+    apply_addon_java_patch "$addon_name"
+}
+
+################################################################################
+# Add-On Functions
+################################################################################
+
+apply_spring_boot_web_addon() {
+    print_info "Applying Spring Boot Web add-on..."
+    apply_addon_templates "spring-boot-web"
+}
+
 apply_postgresql_addon() {
     print_info "Applying PostgreSQL + Flyway add-on..."
+    apply_addon_templates "postgresql-flyway"
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
-
-# PostgreSQL + Flyway
-spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
-spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
-flyway-core = { module = "org.flywaydb:flyway-core" }
-flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
-postgresql = { module = "org.postgresql:postgresql" }
-h2 = { module = "com.h2database:h2" }
-EOF
-
-    # Add dependencies to build.gradle.kts (after testRuntimeOnly line)
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // PostgreSQL + Flyway\\
-    implementation(libs.spring.boot.starter.data.jpa)\\
-    implementation(libs.spring.boot.starter.validation)\\
-    implementation(libs.flyway.core)\\
-    implementation(libs.flyway.database.postgresql)\\
-    runtimeOnly(libs.postgresql)\\
-    testImplementation(libs.h2)"
-
-    sed -i "/$insert_after/a $new_deps" "$build_file"
-
-    # Add to application.yml
-    cat >> "$SERVICE_DIR/src/main/resources/application.yml" <<EOF
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/${DATABASE_NAME}
-    username: \${DB_USERNAME:postgres}
-    password: \${DB_PASSWORD:postgres}
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-EOF
-
-    # Create migration directory
-    mkdir -p "$SERVICE_DIR/src/main/resources/db/migration"
-
-    # Create initial migration
-    cat > "$SERVICE_DIR/src/main/resources/db/migration/V1__initial_schema.sql" <<EOF
--- Initial schema for ${SERVICE_NAME}
-
--- Example table (customize as needed)
--- CREATE TABLE example (
---     id BIGSERIAL PRIMARY KEY,
---     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
---     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
---     deleted BOOLEAN NOT NULL DEFAULT FALSE
--- );
-EOF
-
-    print_success "PostgreSQL + Flyway add-on applied"
+    # Additional setup
+    print_info "Database '$DATABASE_NAME' needs to be created manually"
+    print_info "Run: createdb $DATABASE_NAME"
 }
 
 apply_redis_addon() {
     print_info "Applying Redis add-on..."
-
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
-
-# Redis
-spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
-spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
-EOF
-
-    # Add dependencies to build.gradle.kts
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // Redis\\
-    implementation(libs.spring.boot.starter.data.redis)\\
-    implementation(libs.spring.boot.starter.cache)"
-
-    sed -i "/$insert_after/a $new_deps" "$build_file"
-
-    # Add to application.yml
-    cat >> "$SERVICE_DIR/src/main/resources/application.yml" <<EOF
-
-  data:
-    redis:
-      host: \${REDIS_HOST:localhost}
-      port: \${REDIS_PORT:6379}
-      password: \${REDIS_PASSWORD:}
-      database: 0
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
-
-  cache:
-    type: redis
-    redis:
-      time-to-live: 600000  # 10 minutes
-      cache-null-values: false
-      use-key-prefix: true
-      key-prefix: "${SERVICE_NAME}:"
-EOF
-
-    print_success "Redis add-on applied"
+    apply_addon_templates "redis"
 }
 
 apply_rabbitmq_addon() {
-    print_info "Applying RabbitMQ add-on..."
+    print_info "Applying RabbitMQ + Spring Cloud Stream add-on..."
+    apply_addon_templates "rabbitmq-spring-cloud"
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
-
-# RabbitMQ + Spring Cloud Stream
-springCloudVersion = "2024.0.1"
-
-[libraries]
-spring-cloud-stream = { module = "org.springframework.cloud:spring-cloud-stream" }
-spring-cloud-stream-binder-rabbit = { module = "org.springframework.cloud:spring-cloud-stream-binder-rabbit" }
-spring-modulith-events-amqp = { module = "org.springframework.modulith:spring-modulith-events-amqp" }
-EOF
-
-    # Add dependencyManagement to build.gradle.kts (after dependencies block)
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-
-    # Add Spring Cloud BOM
-    sed -i '/dependencies {/i \dependencyManagement {\n    imports {\n        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2024.0.1")\n    }\n}\n' "$build_file"
-
-    # Add dependencies
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // RabbitMQ + Spring Cloud Stream\\
-    implementation(libs.spring.cloud.stream)\\
-    implementation(libs.spring.cloud.stream.binder.rabbit)\\
-    implementation(libs.spring.modulith.events.amqp)"
-
-    sed -i "/$insert_after/a $new_deps" "$build_file"
-
-    # Add to application.yml
-    cat >> "$SERVICE_DIR/src/main/resources/application.yml" <<EOF
-
-  rabbitmq:
-    host: \${RABBITMQ_HOST:localhost}
-    port: \${RABBITMQ_PORT:5672}
-    username: \${RABBITMQ_USERNAME:guest}
-    password: \${RABBITMQ_PASSWORD:guest}
-
-  cloud:
-    stream:
-      bindings:
-        # Example output channel (publishing events)
-        # output-out-0:
-        #   destination: ${SERVICE_NAME}.events
-        #   content-type: application/json
-        # Example input channel (consuming events)
-        # input-in-0:
-        #   destination: other-service.events
-        #   group: ${SERVICE_NAME}
-        #   content-type: application/json
-EOF
-
-    print_success "RabbitMQ + Spring Cloud Stream add-on applied"
+    print_info "Note: Configure your event bindings in application.yml"
 }
 
 apply_webflux_addon() {
-    print_info "Applying WebFlux WebClient add-on..."
+    print_info "Applying WebFlux (WebClient) add-on..."
+    apply_addon_templates "webflux"
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
-
-# WebFlux (for WebClient HTTP client)
-spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
-reactor-test = { module = "io.projectreactor:reactor-test" }
-EOF
-
-    # Add dependencies to build.gradle.kts
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // WebClient for HTTP calls\\
-    implementation(libs.spring.boot.starter.webflux)\\
-\\
-    // Testing reactive components\\
-    testImplementation(libs.reactor.test)"
-
-    sed -i "/$insert_after/a $new_deps" "$build_file"
-
-    print_success "WebFlux WebClient add-on applied"
-    print_info "Note: Create WebClientConfig in config package to configure WebClient beans"
+    print_info "Note: Create WebClientConfig class manually for HTTP client setup"
 }
 
-apply_shedlock_addon() {
-    print_info "Applying ShedLock add-on..."
+apply_scheduling_addon() {
+    print_info "Applying Scheduling add-on..."
 
-    # Check if PostgreSQL add-on is enabled
-    if [ "$USE_POSTGRESQL" = false ]; then
-        print_error "ShedLock requires PostgreSQL add-on. Please enable PostgreSQL first."
+    local app_file="$SERVICE_DIR/src/main/java/org/budgetanalyzer/$DOMAIN_NAME/${SERVICE_CLASS_NAME}Application.java"
+
+    if [ ! -f "$app_file" ]; then
+        print_error "Application class not found at: $app_file"
+        print_error "Cannot apply Scheduling add-on. Skipping..."
         return 1
     fi
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
+    # Add import
+    sed -i '/^package/a\
+import org.springframework.scheduling.annotation.EnableScheduling;' "$app_file"
 
-# ShedLock (distributed scheduled task locking)
-shedlock = "5.17.1"
+    # Add annotation (before @SpringBootApplication)
+    sed -i '/^@SpringBootApplication/i\
+@EnableScheduling' "$app_file"
 
-[libraries]
-shedlock-spring = { module = "net.javacrumbs.shedlock:shedlock-spring", version.ref = "shedlock" }
-shedlock-provider-jdbc-template = { module = "net.javacrumbs.shedlock:shedlock-provider-jdbc-template", version.ref = "shedlock" }
-EOF
+    print_success "✓ Added @EnableScheduling to Application class"
+}
 
-    # Add dependencies to build.gradle.kts
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // ShedLock (distributed scheduled task locking)\\
-    implementation(libs.shedlock.spring)\\
-    implementation(libs.shedlock.provider.jdbc.template)"
+apply_shedlock_addon() {
+    if [ "$USE_POSTGRESQL" != true ]; then
+        print_error "ShedLock add-on requires PostgreSQL add-on"
+        exit 1
+    fi
 
-    sed -i "/$insert_after/a $new_deps" "$build_file"
+    print_info "Applying ShedLock add-on..."
+    apply_addon_templates "shedlock"
 
-    # Create ShedLock migration
-    local migration_file="$SERVICE_DIR/src/main/resources/db/migration/V2__create_shedlock_table.sql"
-    cat > "$migration_file" <<'EOF'
--- ShedLock table for distributed scheduled task locking
-
-CREATE TABLE shedlock (
-    name VARCHAR(64) NOT NULL PRIMARY KEY,
-    lock_until TIMESTAMP NOT NULL,
-    locked_at TIMESTAMP NOT NULL,
-    locked_by VARCHAR(255) NOT NULL
-);
-
-CREATE INDEX idx_shedlock_lock_until ON shedlock(lock_until);
-EOF
-
-    print_success "ShedLock add-on applied"
-    print_info "Note: Enable with @EnableSchedulerLock in SchedulingConfig class"
+    print_info "Note: Create SchedulingConfig class manually with @EnableSchedulerLock"
 }
 
 apply_springdoc_addon() {
     print_info "Applying SpringDoc OpenAPI add-on..."
+    apply_addon_templates "springdoc"
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
+    print_info "Swagger UI will be available at: http://localhost:$SERVICE_PORT/$SERVICE_NAME/swagger-ui.html"
+}
 
-# SpringDoc OpenAPI
-springdoc = "2.7.0"
+apply_testcontainers_addon() {
+    print_info "Applying TestContainers add-on..."
 
-[libraries]
-springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+    # Track which containers are needed
+    local -a imports=()
+    local -a declarations=()
+    local -a properties=()
+    local -a gradle_deps=()
+    local -a containers_used=()
+
+    # Check which infrastructure add-ons are selected
+    if [ "$USE_POSTGRESQL" = true ]; then
+        containers_used+=("postgresql")
+        imports+=("import org.testcontainers.containers.PostgreSQLContainer;")
+        declarations+=("    @Container")
+        declarations+=("    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(\"postgres:16-alpine\")")
+        declarations+=("        .withDatabaseName(\"$DATABASE_NAME\")")
+        declarations+=("        .withUsername(\"postgres\")")
+        declarations+=("        .withPassword(\"postgres\");")
+        properties+=("        registry.add(\"spring.datasource.url\", postgres::getJdbcUrl);")
+        properties+=("        registry.add(\"spring.datasource.username\", postgres::getUsername);")
+        properties+=("        registry.add(\"spring.datasource.password\", postgres::getPassword);")
+        gradle_deps+=("    testImplementation(libs.testcontainers.postgresql)")
+    fi
+
+    if [ "$USE_REDIS" = true ]; then
+        containers_used+=("redis")
+        imports+=("import org.testcontainers.containers.GenericContainer;")
+        declarations+=("    @Container")
+        declarations+=("    static GenericContainer<?> redis = new GenericContainer<>(\"redis:7-alpine\")")
+        declarations+=("        .withExposedPorts(6379);")
+        properties+=("        registry.add(\"spring.data.redis.host\", redis::getHost);")
+        properties+=("        registry.add(\"spring.data.redis.port\", () -> redis.getMappedPort(6379).toString());")
+    fi
+
+    if [ "$USE_RABBITMQ" = true ]; then
+        containers_used+=("rabbitmq")
+        imports+=("import org.testcontainers.containers.RabbitMQContainer;")
+        declarations+=("    @Container")
+        declarations+=("    static RabbitMQContainer rabbitmq = new RabbitMQContainer(\"rabbitmq:3-management-alpine\");")
+        properties+=("        registry.add(\"spring.rabbitmq.host\", rabbitmq::getHost);")
+        properties+=("        registry.add(\"spring.rabbitmq.port\", () -> rabbitmq.getMappedPort(5672).toString());")
+        properties+=("        registry.add(\"spring.rabbitmq.username\", rabbitmq::getAdminUsername);")
+        properties+=("        registry.add(\"spring.rabbitmq.password\", rabbitmq::getAdminPassword);")
+        gradle_deps+=("    testImplementation(libs.testcontainers.rabbitmq)")
+    fi
+
+    # If no infrastructure containers are selected, create a basic smoke test
+    if [ ${#containers_used[@]} -eq 0 ]; then
+        print_warning "No infrastructure add-ons selected. Creating basic smoke test without containers."
+    fi
+
+    # Add TestContainers version to libs.versions.toml
+    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<EOF
+
+# TestContainers
+testcontainers = "1.19.3"
+
+[libraries.testcontainers]
+bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+junit-jupiter = { module = "org.testcontainers:junit-jupiter" }
+postgresql = { module = "org.testcontainers:postgresql" }
+rabbitmq = { module = "org.testcontainers:rabbitmq" }
 EOF
 
-    # Add dependencies to build.gradle.kts
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // SpringDoc OpenAPI\\
-    implementation(libs.springdoc.openapi.starter.webmvc.ui)"
+    # Add base dependencies to build.gradle.kts
+    cat >> "$SERVICE_DIR/build.gradle.kts" <<EOF
 
-    sed -i "/$insert_after/a $new_deps" "$build_file"
+    // TestContainers
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit.jupiter)
+EOF
 
-    print_success "SpringDoc OpenAPI add-on applied"
-    print_info "Note: Access Swagger UI at http://localhost:$SERVICE_PORT/$SERVICE_NAME/swagger-ui.html"
+    # Add specific container dependencies
+    for dep in "${gradle_deps[@]}"; do
+        echo "$dep" >> "$SERVICE_DIR/build.gradle.kts"
+    done
+
+    # Generate ApplicationSmokeTest.java
+    local test_file="$SERVICE_DIR/src/test/java/org/budgetanalyzer/$DOMAIN_NAME/ApplicationSmokeTest.java"
+
+    # Build imports section
+    local imports_section=""
+    for import in "${imports[@]}"; do
+        imports_section+="$import"$'\n'
+    done
+
+    # Build declarations section
+    local declarations_section=""
+    for decl in "${declarations[@]}"; do
+        declarations_section+="$decl"$'\n'
+    done
+
+    # Build properties section
+    local properties_section=""
+    for prop in "${properties[@]}"; do
+        properties_section+="$prop"$'\n'
+    done
+
+    # Create the test file
+    cat > "$test_file" <<EOF
+package org.budgetanalyzer.$DOMAIN_NAME;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+${imports_section}
+@SpringBootTest
+@Testcontainers
+class ApplicationSmokeTest {
+
+${declarations_section}
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+${properties_section}    }
+
+    @Test
+    void contextLoads() {
+        // Test passes if Spring context loads successfully with all containers
+    }
+}
+EOF
+
+    print_success "✓ Generated ApplicationSmokeTest with containers: ${containers_used[*]:-none}"
+    print_success "✓ Added TestContainers dependencies"
 }
 
 apply_security_addon() {
     print_info "Applying Spring Security add-on..."
+    apply_addon_templates "spring-security"
 
-    # Add to libs.versions.toml
-    cat >> "$SERVICE_DIR/gradle/libs.versions.toml" <<'EOF'
-
-# Spring Security
-spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
-spring-security-test = { module = "org.springframework.security:spring-security-test" }
-EOF
-
-    # Add dependencies to build.gradle.kts
-    local build_file="$SERVICE_DIR/build.gradle.kts"
-    local insert_after="testRuntimeOnly(libs.junit.platform.launcher)"
-    local new_deps="\\
-\\
-    // Spring Security\\
-    implementation(libs.spring.boot.starter.security)\\
-\\
-    // Security testing\\
-    testImplementation(libs.spring.security.test)"
-
-    sed -i "/$insert_after/a $new_deps" "$build_file"
-
-    print_success "Spring Security add-on applied"
-    print_warning "Note: Spring Security is enabled by default. Create SecurityConfig to customize."
+    print_info "Note: Create SecurityConfig class manually to configure authentication"
 }
 
 apply_addons() {
     print_section "Applying Add-Ons"
 
+    $USE_SPRING_BOOT_WEB && apply_spring_boot_web_addon
     $USE_POSTGRESQL && apply_postgresql_addon
     $USE_REDIS && apply_redis_addon
     $USE_RABBITMQ && apply_rabbitmq_addon
     $USE_WEBFLUX && apply_webflux_addon
+    $USE_SCHEDULING && apply_scheduling_addon
     $USE_SHEDLOCK && apply_shedlock_addon
     $USE_SPRINGDOC && apply_springdoc_addon
+    $USE_TESTCONTAINERS && apply_testcontainers_addon
     $USE_SECURITY && apply_security_addon
 
     echo ""
@@ -952,6 +1014,7 @@ main() {
     check_prerequisites
     prompt_service_details
     prompt_addons
+    prompt_postgresql_config
     prompt_github_integration
 
     clone_template
