@@ -142,13 +142,98 @@ tree -L 2 -I 'node_modules|target'
 - [docs/](docs/) - Architecture and cross-service documentation
 - [kubernetes/](kubernetes/) - Production deployment manifests
 
+## Service Creation Workflow
+
+**Quick Start**: Create new Spring Boot microservices using the standardized template system.
+
+### Using the Creation Script (Recommended)
+
+```bash
+cd /workspace/orchestration
+./scripts/create-service.sh
+```
+
+**Time**: ~15 minutes (vs 2-3 hours manual setup)
+
+**What it does**:
+- Clones template repository
+- Replaces placeholders (service name, port, domain, etc.)
+- Applies selected add-ons (PostgreSQL, Redis, RabbitMQ, etc.)
+- Initializes Git repository
+- Creates GitHub repository (optional)
+- Validates build
+
+### Template Repository
+
+**Location**: https://github.com/budgetanalyzer/spring-boot-service-template
+
+**What's included**:
+- Minimal Spring Boot setup with service-web dependency
+- Gradle build with version catalog
+- Code quality tools (Checkstyle, Spotless)
+- Standard package structure
+- CLAUDE.md template
+- Java 24 support with JVM args
+
+### Add-Ons
+
+Optional add-ons for common requirements:
+- **PostgreSQL + Flyway** - Database persistence with migrations
+- **Redis** - Caching and session storage
+- **RabbitMQ + Spring Cloud** - Event-driven messaging
+- **WebFlux WebClient** - Reactive HTTP client
+- **ShedLock** - Distributed scheduled task locking
+- **SpringDoc OpenAPI** - API documentation (Swagger UI)
+- **TestContainers** - Integration testing with real PostgreSQL
+- **Spring Modulith** - Module boundaries and events
+
+### Documentation
+
+Complete service creation documentation:
+- **Quick Guide**: [docs/service-creation/README.md](docs/service-creation/README.md)
+- **Script Usage**: [docs/service-creation/script-usage.md](docs/service-creation/script-usage.md)
+- **Add-Ons Index**: [docs/service-creation/addons/README.md](docs/service-creation/addons/README.md)
+- **Implementation Plan**: [docs/service-creation/microservice-template-plan.md](docs/service-creation/microservice-template-plan.md)
+
+### Post-Creation Integration
+
+After creating a service:
+1. Add service to [docker-compose.yml](docker compose.yml)
+2. Configure NGINX routes in [nginx/nginx.dev.conf](nginx/nginx.dev.conf)
+3. Create database (if using PostgreSQL)
+4. Update this CLAUDE.md with service information
+5. Implement domain logic
+
+### When NOT to Use Template
+
+**Do NOT use template for**:
+- Reactive services (Spring Cloud Gateway, WebFlux-based)
+- Non-Spring Boot applications
+- Frontend applications
+
+These require different architecture patterns.
+
+### Discovery
+
+```bash
+# List available add-ons
+ls docs/service-creation/addons/
+
+# View template structure
+gh repo view budgetanalyzer/spring-boot-service-template
+
+# Check script help
+./scripts/create-service.sh --help
+```
+
 ## Service Repositories
 
 Each microservice is maintained in its own repository:
-- **service-common**: https://github.com/budgetanalyzer/service-common
+- **service-common**: https://github.com/budgetanalyzer/service-common (shared utilities, split into service-core and service-web modules)
 - **transaction-service**: https://github.com/budgetanalyzer/transaction-service
 - **currency-service**: https://github.com/budgetanalyzer/currency-service
 - **budget-analyzer-web**: https://github.com/budgetanalyzer/budget-analyzer-web
+- **spring-boot-service-template**: https://github.com/budgetanalyzer/spring-boot-service-template (template for new services)
 
 ## Best Practices
 
