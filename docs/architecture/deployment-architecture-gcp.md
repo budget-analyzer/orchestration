@@ -145,7 +145,7 @@ Based on [docker-compose.yml](../../docker-compose.yml):
 
 **Gateway Layer:**
 - NGINX Gateway: Resource-based routing (`/api/v1/transactions` → transaction-service)
-- Token Validation Service: JWT validation for NGINX (port 8090, **not yet implemented**)
+- Token Validation Service: JWT validation for NGINX (port 8088, **not yet implemented**)
 
 ---
 
@@ -743,7 +743,7 @@ Browser → Session Gateway → NGINX Gateway → Backend Services
 
 **Components Not Yet Built:**
 1. Session Gateway (Spring Cloud Gateway with OAuth2)
-2. Token Validation Service (port 8090)
+2. Token Validation Service (port 8088)
 3. Auth0 tenant configuration
 4. NGINX JWT validation via auth_request
 5. Backend OAuth2 Resource Server configuration
@@ -2016,7 +2016,7 @@ export const config = configs[env as keyof typeof configs];
 #### Weeks 1-2: Session Gateway + Token Validation Service
 - Implement Spring Cloud Gateway with Spring Security OAuth2
 - Configure OAuth2 Client for Auth0 integration
-- Implement token validation service (port 8090)
+- Implement token validation service (port 8088)
 - Store JWTs in Redis, issue HTTP-only session cookies
 - Proactive token refresh (5 min before expiration)
 
@@ -2472,7 +2472,7 @@ location /api/ {
 
 location /validate_token {
     internal;
-    proxy_pass http://token_validation_service:8090/validate;
+    proxy_pass http://token_validation_service:8088/validate;
 }
 ```
 
@@ -2506,7 +2506,7 @@ spec:
     backendRefs:
     # First: Validate token
     - name: token-validation-service
-      port: 8090
+      port: 8088
       weight: 0  # Not actually routing here, using for auth
       filters:
       - type: RequestHeaderModifier
@@ -2541,7 +2541,7 @@ spec:
     grpc:
       backendRef:
         name: token-validation-service
-        port: 8090
+        port: 8088
 ```
 
 **Option B: Use Service Mesh (Linkerd, future):**

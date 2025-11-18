@@ -50,7 +50,7 @@ This document outlines the security architecture for a financial data applicatio
 │                    • Load Balancing                              │
 └────────┬─────────────────────────────────────────────────────────┘
          │
-         ├──────► Token Validation Service (Port 8090)
+         ├──────► Token Validation Service (Port 8088)
          │        • JWT signature verification
          │        • Claims validation
          │
