@@ -2,7 +2,141 @@
 
 **Version:** 1.0
 **Date:** November 10, 2025
-**Status:** Implementation Plan
+**Status:** In Progress - Phase 5 (Completed) → Next: Phase 6 Testing
+
+---
+
+## Current Progress
+
+### ✅ Phase 1: Infrastructure Setup - COMPLETED
+- Redis added to Docker Compose
+- Session Gateway service created
+- Token Validation Service created
+- Auth0 account set up
+- Docker Compose updated
+
+### ✅ Phase 2: Session Gateway Implementation - COMPLETED
+- OAuth2 Client configured
+- Session management with Redis configured
+- Token relay implemented
+- Proactive token refresh implemented
+- Logout endpoint implemented
+
+### ✅ Phase 3: NGINX Configuration - COMPLETED
+- Task 3.1: Auth0 abstraction endpoints configured (JWKS and discovery endpoints ready for production)
+- Task 3.2: JWT validation with auth_request configured (Token Validation Service integration)
+- Task 3.3: All API routes protected with JWT validation (auth_request directive on all /api/* routes)
+- Task 3.4: Rate limiting applied to all API routes (100 req/min per user/IP with configurable burst limits)
+- Task 3.5: Security headers configured (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
+- **Note**: CORS not needed - same-origin architecture (Session Gateway is entry point)
+
+### ✅ Phase 4: Backend Service Authorization - COMPLETED
+- Task 4.1: OAuth2 Resource Server added to Transaction Service
+- Task 4.2: JWT validation configured in Transaction Service
+- Task 4.3: Data-level authorization implemented in Transaction Service
+- Task 4.4: Method-level security added
+- Task 4.5: Currency Service configured with OAuth2 Resource Server
+
+### ✅ Phase 5: React Frontend Integration - COMPLETED
+- Task 5.1: No direct Auth0 integration to remove (confirmed clean)
+- Task 5.2: Login flow implemented (redirects to Session Gateway OAuth flow)
+- Task 5.3: Logout flow implemented (calls Session Gateway /logout endpoint)
+- Task 5.4: Frontend base URL configured (all requests go through Session Gateway port 8081)
+- Task 5.5: Session state management implemented (calls /user endpoint)
+- Task 5.6: Development vs production settings documented
+- **Key changes:**
+  - `useAuth` hook refactored for session-based auth
+  - API client configured with `withCredentials: true`
+  - Login page created with Auth0 redirect
+  - User types updated to match Session Gateway response
+  - Session Gateway configured with frontend route
+  - Comprehensive authentication documentation created
+
+### 🚧 Phase 6: Testing & Validation - IN PROGRESS
+
+**Issue #1: CORS Errors on Unauthenticated API Requests - RESOLVED**
+
+- **Symptom**: Frontend at `localhost:8081` making XHR request to `/api/v1/transactions` received CORS error when redirected to Auth0
+- **Root Cause Discovery Process**:
+  1. **Initial hypothesis**: Spring Security WebFlux's `.oauth2Login()` overrides custom exception handling
+  2. **First attempt**: Created custom `ApiOrBrowserAuthenticationEntryPoint` class → Failed (never invoked)
+  3. **Second attempt**: Used `DelegatingServerAuthenticationEntryPoint` with `HttpStatusServerEntryPoint` → Failed (still redirected)
+  4. **Breakthrough with logging**: Added comprehensive logging that revealed:
+     - DelegatingServerAuthenticationEntryPoint WAS matching `/api/**` correctly ✓
+     - Custom lambda WAS executing ✓
+     - `HttpStatusServerEntryPoint.commence()` WAS setting 401 status ✓
+     - **BUT** OAuth2 filter was still redirecting to Auth0 ✗
+  5. **Root cause identified**: `HttpStatusServerEntryPoint.commence()` sets status code but **does NOT commit the response**
+     - In Spring WebFlux, uncommitted responses can be modified by subsequent filters
+     - OAuth2 login filter runs after the entry point and overwrites 401 with 302 redirect
+     - The redirect to Auth0 causes CORS error in browser
+- **Solution Implemented**:
+  - Use `DelegatingServerAuthenticationEntryPoint` with explicit path matchers ✓
+  - For `/api/**` requests: **Manually set status AND commit response**:
+    ```java
+    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+    return exchange.getResponse().setComplete(); // ← Critical: commits response
+    ```
+  - For other requests: `RedirectServerAuthenticationEntryPoint` redirects to OAuth2
+  - **Key insight**: `setComplete()` commits the response, preventing OAuth2 filter from modifying it
+- **Technical Deep Dive**:
+  - `HttpStatusServerEntryPoint.commence()` returns `Mono.fromRunnable(() → setStatusCode())`
+  - This sets the status but does NOT call `setComplete()`
+  - Response remains uncommitted → mutable by subsequent filters
+  - OAuth2AuthorizationRequestRedirectFilter sees unauthenticated request and redirects
+  - Solution: Explicitly commit response with `exchange.getResponse().setComplete()`
+- **Why Previous Approaches Failed**:
+  1. **Custom `ApiOrBrowserAuthenticationEntryPoint`**: Never invoked due to oauth2Login precedence
+  2. **`DelegatingServerAuthenticationEntryPoint` + `HttpStatusServerEntryPoint`**: Matched correctly but didn't commit response
+  3. **Final working solution**: `DelegatingServerAuthenticationEntryPoint` + manual status + `setComplete()`
+- **References**:
+  - Spring Security Issue #9266: "WebFlux security should not overwrite the default entry point"
+  - Spring Security Issue #6812: "oauth2Login does not auto-redirect for XHR request"
+  - Spring WebFlux `ServerHttpResponse.setComplete()` JavaDoc: "Indicate that message handling is complete"
+- **Files Modified**:
+  - Modified: `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/SecurityConfig.java`
+    - Replaced `HttpStatusServerEntryPoint.commence()` with manual status + `setComplete()`
+    - Removed unused `HttpStatusServerEntryPoint` import
+    - Added logging to verify execution flow
+    - Updated JavaDoc to explain response commitment requirement
+  - Deleted: `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/ApiOrBrowserAuthenticationEntryPoint.java`
+  - Created (for debugging): `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/RequestLoggingFilter.java`
+
+**Issue #2: OAuth2 Redirect Loop at Auth0 Consent Screen - IN PROGRESS**
+
+- **Symptom**: User authenticates with Auth0 (social login: Google/Apple/Facebook), sees consent screen, accepts consent, then gets stuck in a loop back to consent screen
+- **URL stuck at**: `https://dev-gcz1r8453xzz0317.us.auth0.com/u/consent?state=...`
+- **Configuration verified**:
+  - Auth0 Client ID: `Pd4L6ijQmJhqx8tgqpuTiRRg5uKKAVyh`
+  - Auth0 Domain: `dev-gcz1r8453xzz0317.us.auth0.com`
+  - Callback URL already configured in Auth0: `http://localhost:8081/login/oauth2/code/auth0`
+  - Social providers enabled: Google, Apple, Facebook
+- **Debugging approach**:
+  - User wants to debug with consent ENABLED (not skip) to understand the full flow
+  - Added comprehensive logging to trace OAuth2 callback flow
+- **Files Modified**:
+  - Modified: `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/OAuth2ClientConfig.java`
+    - Added logging to show exact redirect_uri being sent to Auth0
+    - Wrapped authorization request resolver to log final authorization request
+  - Modified: `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/SecurityConfig.java`
+    - Enhanced success/failure handlers with detailed logging
+    - Added request URI logging to trace callback
+  - Created: `/workspace/session-gateway/src/main/java/org/budgetanalyzer/sessiongateway/config/RequestLoggingWebFilter.java`
+    - Logs all OAuth2-related incoming requests
+  - Fixed: `/workspace/session-gateway/.env`
+    - Changed `AUTH0_LOGOUT_RETURN_TO` from `http://localhost:8080` to `http://localhost:8081`
+- **Understanding Two Consent Screens**:
+  - **Social Provider Consent** (Google/Apple/Facebook): "Allow Budget Analyzer to access your Google profile?" - REQUIRED, CANNOT be skipped, controlled by social provider
+  - **Auth0 Application Consent**: "Allow Budget Analyzer to access your email?" - OPTIONAL, can be skipped for first-party apps, controlled by Auth0 "Skip User Consent" setting
+  - User preference: Debug with both consent screens enabled to understand full flow
+
+**Next Steps**:
+- User will rebuild Session Gateway and test
+- Check logs for exact redirect_uri being sent to Auth0
+- Check logs for callback request from Auth0
+- Verify callback is reaching `/login/oauth2/code/auth0`
+- Check for authentication success/failure messages
+- If callback is failing, investigate why Spring Security isn't processing it
 
 ---
 
@@ -10,11 +144,276 @@
 
 This plan implements the security architecture defined in `security-architecture.md` with the following components:
 
+### Component Overview
+
 - **Session Gateway (BFF)**: Spring Cloud Gateway on port 8081 - manages OAuth flows, stores tokens in Redis, issues session cookies
-- **NGINX Gateway**: Port 8080 - validates JWTs, routes to microservices
-- **Token Validation Service**: Port 8090 - validates JWT signatures for NGINX (auth_request)
+- **NGINX Gateway**: Port 8080 - validates JWTs, routes to microservices, serves React frontend
+- **Token Validation Service**: Port 8088 - validates JWT signatures for NGINX (auth_request)
 - **Auth0**: Identity provider (abstracted behind NGINX /auth/* endpoints)
 - **Backend Services**: Budget API (8082), Currency Service (8084) - enforce data-level authorization
+
+### BFF + API Gateway Hybrid Pattern
+
+This architecture implements a **hybrid BFF + API Gateway pattern**, which is the industry-standard approach for securing browser-based applications while supporting multiple client types:
+
+**BFF (Backend for Frontend) Layer:**
+- Session Gateway handles web browser-specific concerns
+- OAuth2/OIDC authentication flows
+- Session management (HTTP-only cookies)
+- Token lifecycle (refresh, expiration)
+- Proxies authenticated requests to API Gateway
+
+**API Gateway Layer:**
+- NGINX handles shared infrastructure concerns
+- JWT validation (all requests)
+- Request routing to microservices
+- Rate limiting and DDoS protection
+- Static file serving (React frontend)
+- Load balancing
+
+**Why This Hybrid Approach:**
+- **Separation of Concerns**: BFF handles client-specific auth, Gateway handles shared routing/security
+- **Multiple Client Support**: Web browsers use BFF (session cookies), M2M clients use Gateway directly (JWTs)
+- **Defense in Depth**: Multiple validation layers (BFF → Gateway → Services)
+- **Industry Standard**: Recommended pattern from Auth0, Duende, Curity, and other OAuth2 experts
+
+### Complete Request Flow Documentation
+
+#### **Flow 1: Web Browser Authentication & API Request**
+
+This is the primary flow for browser-based users accessing the application:
+
+```
+┌─────────┐
+│ Browser │
+└────┬────┘
+     │ 1. User navigates to http://localhost:8081
+     ├──────────────────────────────────────────────────────────────┐
+     │                                                               │
+     ▼                                                               │
+┌─────────────────────────┐                                         │
+│  Session Gateway :8081  │  (Spring Cloud Gateway - BFF Pattern)  │
+│  ───────────────────    │                                         │
+│  • OAuth2 flows         │                                         │
+│  • Session cookies      │                                         │
+│  • Token storage (Redis)│                                         │
+└────┬────────────────────┘                                         │
+     │ 2. If not authenticated → redirect to Auth0                 │
+     │ 3. After Auth0 → JWT stored in Redis session               │
+     │ 4. Frontend proxies to NGINX (serves React app)            │
+     ├──────────────────────────────────────────────────────────┐  │
+     │                                                           │  │
+     │ 5. API Request: GET /api/v1/transactions                 │  │
+     │    Cookie: SESSION=<session-id>                           │  │
+     │    Session Gateway looks up JWT from Redis                │  │
+     │    Adds: Authorization: Bearer <jwt>                      │  │
+     │                                                           │  │
+     ▼                                                           │  │
+┌───────────────────────────┐                                   │  │
+│   NGINX Gateway :8080     │  (API Gateway + Reverse Proxy)   │  │
+│   ─────────────────       │                                   │  │
+│   • Receives JWT          │                                   │  │
+│   • auth_request enabled  │                                   │  │
+└────┬──────────────────────┘                                   │  │
+     │ 6. NGINX makes internal subrequest for JWT validation    │  │
+     │    auth_request /auth/validate                           │  │
+     │    Forwards: Authorization: Bearer <jwt>                 │  │
+     │              X-Original-URI: /api/v1/transactions        │  │
+     │                                                           │  │
+     ▼                                                           │  │
+┌─────────────────────────────────┐                             │  │
+│ Token Validation Service :8088  │  (JWT Validator)           │  │
+│ ───────────────────────────     │                             │  │
+│ • Validates JWT signature       │                             │  │
+│ • Checks expiration             │                             │  │
+│ • Validates issuer (Auth0)      │                             │  │
+│ • Validates audience            │                             │  │
+│ • Fetches JWKS from Auth0       │                             │  │
+└────┬────────────────────────────┘                             │  │
+     │ 7. Returns:                                               │  │
+     │    200 OK with X-JWT-User-Id: <user-id>   (valid JWT)   │  │
+     │    OR 401 Unauthorized (invalid JWT)                     │  │
+     │                                                           │  │
+     ▼                                                           │  │
+┌───────────────────────────┐                                   │  │
+│   NGINX Gateway :8080     │                                   │  │
+│   ─────────────────       │                                   │  │
+│   • If 200: continue      │                                   │  │
+│   • If 401: return 401    │                                   │  │
+│   • Extracts user ID:     │                                   │  │
+│     auth_request_set      │                                   │  │
+│     $jwt_user_id          │                                   │  │
+└────┬──────────────────────┘                                   │  │
+     │ 8. Forwards to backend service                           │  │
+     │    Authorization: Bearer <jwt>                           │  │
+     │    X-User-Id: <user-id>                                  │  │
+     │                                                           │  │
+     ▼                                                           │  │
+┌──────────────────────────┐                                    │  │
+│ Transaction Service :8082│  (Business Logic)                  │  │
+│ ────────────────────     │                                    │  │
+│ • Receives validated JWT │                                    │  │
+│ • JWT already validated  │ ◄─ DEFENSE IN DEPTH:              │  │
+│   by Token Validation    │    Backend services CAN validate   │  │
+│   Service                │    JWTs but NGINX already did it   │  │
+│ • Enforces data-level    │                                    │  │
+│   authorization          │                                    │  │
+│ • Returns data           │                                    │  │
+└────┬─────────────────────┘                                    │  │
+     │ 9. Response flows back                                   │  │
+     │                                                           │  │
+     │ Backend → NGINX → Session Gateway → Browser             │  │
+     └───────────────────────────────────────────────────────────┘  │
+                                                                    │
+Response arrives at browser ◄───────────────────────────────────────┘
+```
+
+#### **Flow 2: M2M Client Direct API Access**
+
+Machine-to-machine clients bypass Session Gateway and use JWT directly:
+
+```
+┌──────────────┐
+│ M2M Client   │
+│ (API Client) │
+└──────┬───────┘
+       │ 1. Obtains JWT from Auth0 (Client Credentials flow)
+       │    POST /auth/token with client_id & client_secret
+       │    Response: { access_token: <jwt> }
+       │
+       │ 2. Makes API request with JWT
+       │    GET /api/v1/transactions
+       │    Authorization: Bearer <jwt>
+       │
+       ▼
+┌───────────────────────────┐
+│   NGINX Gateway :8080     │
+│   ─────────────────       │
+│   • Receives JWT          │
+│   • auth_request /auth/validate
+└────┬──────────────────────┘
+       │ 3. Same validation flow as browser
+       │    (Token Validation Service validates JWT)
+       ▼
+┌──────────────────────────┐
+│ Backend Service          │
+│ • Returns data           │
+└──────────────────────────┘
+```
+
+#### **Key Architectural Points**
+
+1. **Token Validation Service is the SINGLE source of truth for JWT validation**
+   - NGINX delegates ALL JWT validation to this service via `auth_request`
+   - Backend services receive pre-validated JWTs
+   - Defense in depth: Backend services CAN validate JWTs but shouldn't need to
+
+2. **Session Gateway is ONLY for browser-based authentication**
+   - Handles OAuth2 flows (Auth0 redirects)
+   - Stores JWTs in Redis (not in browser)
+   - Issues HTTP-only session cookies
+   - M2M clients bypass this entirely
+
+3. **NGINX acts as the central gateway**
+   - Routes ALL API requests (browser and M2M)
+   - Validates JWTs before proxying to backend
+   - Extracts user ID and forwards to backend
+   - Handles rate limiting and security headers
+
+4. **Port Summary**
+   - **8081**: Session Gateway - Browser entry point
+   - **8080**: NGINX - API Gateway (all clients)
+   - **8088**: Token Validation Service - JWT validator
+   - **8082**: Transaction Service - Business logic
+   - **8084**: Currency Service - Business logic
+   - **3000**: React Dev Server - Frontend (dev only)
+
+#### **Web Browser Request Flow (Detailed Steps)**
+
+1. **Browser → Session Gateway (8081)**
+   - User navigates to `http://localhost:8081`
+   - If not authenticated, redirect to Auth0 OAuth flow
+   - After authentication, JWT stored in Redis, session cookie issued
+
+2. **Browser → Session Gateway (8081) - API Request**
+   - Browser makes API call: `GET http://localhost:8081/api/v1/transactions`
+   - Includes session cookie: `Cookie: SESSION=<session-id>`
+
+3. **Session Gateway → Redis**
+   - Looks up session by session ID
+   - Retrieves JWT from Redis session
+
+4. **Session Gateway → NGINX (8080)**
+   - Proxies request to NGINX
+   - Adds JWT: `Authorization: Bearer <jwt>`
+   - Forwards original path: `GET http://localhost:8080/api/v1/transactions`
+
+5. **NGINX → Token Validation Service (8088) - Internal Subrequest**
+   - NGINX directive: `auth_request /auth/validate;`
+   - Makes internal GET request: `GET http://localhost:8088/auth/validate`
+   - Forwards: `Authorization: Bearer <jwt>`, `X-Original-URI: /api/v1/transactions`
+
+6. **Token Validation Service Processing**
+   - Spring Security OAuth2 Resource Server validates JWT:
+     - Signature validation using Auth0 JWKS
+     - Expiration check
+     - Issuer validation (Auth0 domain)
+     - Audience validation (API identifier)
+   - If valid: Returns `200 OK` with `X-JWT-User-Id: <user-id>`
+   - If invalid: Returns `401 Unauthorized` with error details
+
+7. **NGINX Processing**
+   - If Token Validation Service returns 401 → NGINX returns 401 to Session Gateway
+   - If Token Validation Service returns 200:
+     - NGINX directive: `auth_request_set $jwt_user_id $upstream_http_x_jwt_user_id;`
+     - Extracts user ID from response header
+     - Continues to backend service
+
+8. **NGINX → Backend Service (8082/8084)**
+   - Forwards request with headers:
+     - `Authorization: Bearer <jwt>` (original JWT)
+     - `X-User-Id: <user-id>` (extracted by NGINX)
+   - Backend receives pre-validated JWT
+
+9. **Backend Service Processing**
+   - JWT already validated by Token Validation Service
+   - Enforces data-level authorization (e.g., `WHERE user_id = :userId`)
+   - Returns response
+
+10. **Response Chain**
+    - Backend → NGINX → Session Gateway → Browser
+    - Browser receives API response
+
+**Key Insight:** Session Gateway is NOT a replacement for NGINX - it's a complementary layer specifically for browser-based authentication security.
+
+### Machine-to-Machine (M2M) Authentication
+
+**M2M clients bypass the Session Gateway** and use OAuth2 Client Credentials flow directly with NGINX:
+
+**Flow:**
+1. M2M client calls NGINX `/auth/token` endpoint with `client_id` and `client_secret`
+2. NGINX proxies request to Auth0 token endpoint
+3. Auth0 validates credentials and returns JWT access token
+4. M2M client makes API requests to NGINX with JWT in Authorization header
+5. NGINX validates JWT (via Token Validation Service) and routes to backend services
+
+**Key Differences from Browser Flow:**
+- No session cookies (stateless)
+- No Session Gateway involvement
+- Direct JWT usage (not hidden behind BFF)
+- Scoped permissions instead of user roles
+- Longer token lifetime (configured in Auth0)
+
+**Production Access:**
+- M2M clients use `api.budgetanalyzer.com` hostname
+- Load balancer routes to NGINX (8080) directly
+- Separate from web browser traffic (`budgetanalyzer.com` → Session Gateway)
+
+**Security:**
+- Client credentials stored securely (not in browser)
+- Token Validation Service validates JWT signatures
+- Rate limiting applied per client_id
+- NGINX enforces API authorization independent of Session Gateway
 
 ---
 
@@ -38,7 +437,7 @@ This plan implements the security architecture defined in `security-architecture
 - Add dependencies: spring-security-oauth2-resource-server, spring-boot-starter-web
 - Create `/auth/validate` endpoint for NGINX auth_request
 - Configure JWT decoder with Auth0 issuer URI
-- Port: 8090
+- Port: 8088
 
 ### Task 1.4: Set Up Auth0 Account
 - Create Auth0 account and tenant
@@ -75,6 +474,7 @@ This plan implements the security architecture defined in `security-architecture
 - Add TokenRelay filter to automatically forward JWTs to downstream services
 - Configure routes to NGINX gateway (port 8080)
 - Set up path rewriting: /api/* → http://nginx-gateway:8080/api/*
+- **Configure frontend route**: / → http://nginx-gateway:8080/ (proxy to React app served by NGINX)
 
 ### Task 2.4: Implement Proactive Token Refresh
 - Create custom filter to check token expiration (5 min threshold)
@@ -94,15 +494,15 @@ This plan implements the security architecture defined in `security-architecture
 
 ### Task 3.1: Abstract Auth0 Behind NGINX
 - Add NGINX location blocks for /auth/* endpoints
-- Proxy /auth/authorize → Auth0 authorize endpoint
-- Proxy /auth/token → Auth0 token endpoint
-- Proxy /auth/callback → Auth0 callback (or Session Gateway handles this)
-- Proxy /auth/logout → Auth0 logout
-- Proxy /auth/.well-known/openid-configuration → Auth0 discovery
+- Proxy /auth/token → Auth0 token endpoint (for M2M Client Credentials flow)
+- Proxy /.well-known/openid-configuration → Auth0 discovery (for Token Validation Service)
+- Proxy /.well-known/jwks.json → Auth0 JWKS (for JWT signature verification)
+- **Note**: Session Gateway handles OAuth flows for browsers (/oauth2/authorization, /login/oauth2/code, /logout)
+- **Note**: M2M clients use /auth/token on NGINX directly (bypassing Session Gateway)
 
 ### Task 3.2: Configure JWT Validation with auth_request
 - Add internal location `/auth/validate`
-- Configure auth_request to call Token Validation Service (port 8090)
+- Configure auth_request to call Token Validation Service (port 8088)
 - Set proxy_pass_request_body off for efficiency
 - Forward Authorization header to validation service
 
@@ -117,27 +517,28 @@ This plan implements the security architecture defined in `security-architecture
 - Set reasonable limits (e.g., 100 req/min per user)
 - Return 429 Too Many Requests on violations
 
-### Task 3.5: Configure CORS and Security Headers
-- Set CORS headers for frontend (port 3000)
-- Add security headers: HSTS, X-Content-Type-Options, X-Frame-Options
-- Configure CSP headers
+### Task 3.5: Configure Security Headers
+- Add security headers: HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
+- Configure CSP (Content Security Policy) headers
+- Configure Referrer-Policy headers
+- **Note**: CORS not needed - Session Gateway (8081) is single entry point for browsers (same-origin)
 
 ---
 
 ## Phase 4: Backend Service Authorization (Week 4)
 
-### Task 4.1: Add OAuth2 Resource Server to Budget API
+### Task 4.1: Add OAuth2 Resource Server to Transaction Service
 - Add spring-security-oauth2-resource-server dependency
 - Configure JWT decoder with Auth0 issuer URI
 - Create SecurityConfig with JWT authentication
 
-### Task 4.2: Configure JWT Validation in Budget API
+### Task 4.2: Configure JWT Validation in Transaction Service
 - Set issuer-uri in application.yml
 - Configure audience validation (budget-analyzer-api)
 - Extract roles/scopes from JWT claims
 - Map to Spring Security authorities
 
-### Task 4.3: Implement Data-Level Authorization in Budget API
+### Task 4.3: Implement Data-Level Authorization in Transaction Service
 - Extract user ID from JWT (sub claim)
 - Update repository queries to scope by user ID
 - Example: SELECT * FROM transactions WHERE user_id = :userId
@@ -166,27 +567,39 @@ This plan implements the security architecture defined in `security-architecture
 
 ### Task 5.2: Implement Login Flow
 - Create Login component with "Login" button
-- Redirect to Session Gateway: window.location.href = 'http://localhost:8081/oauth2/authorization/auth0'
-- Session Gateway handles OAuth flow, sets session cookie, redirects back
+- Redirect to Session Gateway: `window.location.href = 'http://localhost:8081/oauth2/authorization/auth0'`
+- Session Gateway handles OAuth flow, sets session cookie, redirects back to frontend
 
 ### Task 5.3: Implement Logout Flow
 - Create logout function
-- Call Session Gateway logout endpoint
+- Call Session Gateway logout endpoint: `http://localhost:8081/logout`
 - Clear any local state
 - Redirect to home page
 
-### Task 5.4: Update API Calls
-- Change API base URL from direct backend to Session Gateway
-- From: http://localhost:8080/api/*
-- To: http://localhost:8081/api/*
-- Session Gateway adds JWT, forwards to NGINX
-- Include credentials in fetch: credentials: 'include' (for cookies)
+### Task 5.4: Configure Frontend Base URL
+- **All requests go to Session Gateway (port 8081)**
+- Frontend base URL: `http://localhost:8081`
+- API calls: `http://localhost:8081/api/*` (Session Gateway adds JWT, forwards to NGINX)
+- Static files: `http://localhost:8081/` (Session Gateway proxies to NGINX which serves React)
+- Include credentials in fetch: `credentials: 'include'` (for session cookies)
+- **No CORS configuration needed** - same-origin (all requests to port 8081)
 
 ### Task 5.5: Implement Session State Management
 - Check session status on app load
-- Call /user endpoint to get current user info
+- Call `/user` endpoint to get current user info: `http://localhost:8081/user`
 - Handle 401 responses (redirect to login)
 - Display user info in UI
+
+### Task 5.6: Development vs Production Configuration
+- **Development**: Frontend accessed via `http://localhost:8081`
+  - Session Gateway (8081) proxies to NGINX (8080)
+  - NGINX (8080) proxies to Vite dev server (3000) for React app
+  - Hot module reload (HMR) works through proxy chain
+- **Production**: Frontend accessed via load balancer (port 80/443)
+  - Load balancer routes to Session Gateway (8081)
+  - Session Gateway proxies to NGINX (8080)
+  - NGINX serves static React build artifacts
+- **Environment variable**: `VITE_API_BASE_URL` should be relative (`/api`) or point to Session Gateway
 
 ---
 
@@ -221,8 +634,9 @@ This plan implements the security architecture defined in `security-architecture
 - Test concurrent requests during token refresh
 - Test session timeout (30 min idle)
 - Test rate limiting triggers 429
-- Test CORS from frontend origin
+- Test same-origin enforcement (all requests through Session Gateway)
 - Load test with realistic user patterns
+- Test M2M client flow (direct NGINX access with Client Credentials)
 
 ---
 
@@ -266,12 +680,21 @@ This plan implements the security architecture defined in `security-architecture
 
 ## Phase 8: Production Hardening (Week 7-8)
 
-### Task 8.1: Enable HTTPS
-- Generate SSL certificates (Let's Encrypt for production)
-- Configure NGINX SSL termination
-- Update Session Gateway to require HTTPS
-- Update frontend to use HTTPS
-- Enable HSTS headers
+### Task 8.1: Enable HTTPS and Load Balancer Configuration
+- **Load Balancer Setup**:
+  - Configure GCP Load Balancer (or AWS ALB) on port 80/443
+  - SSL/TLS termination at load balancer
+  - Generate SSL certificates (Let's Encrypt or GCP-managed certificates)
+- **Two Entry Points**:
+  - `budgetanalyzer.com` → Load Balancer → Session Gateway (8081) - for web browsers
+  - `api.budgetanalyzer.com` → Load Balancer → NGINX (8080) - for M2M clients
+- **Internal Service Configuration**:
+  - Session Gateway remains on port 8081 (internal)
+  - NGINX remains on port 8080 (internal)
+  - No port 80 conflict - load balancer handles external ports
+- **Security Headers**:
+  - Enable HSTS headers at load balancer or NGINX
+  - Configure Secure flag on session cookies (HTTPS only)
 
 ### Task 8.2: Implement Monitoring
 - Add metrics for Session Gateway (active sessions, token refresh rate)
@@ -290,9 +713,10 @@ This plan implements the security architecture defined in `security-architecture
 ### Task 8.4: Security Review
 - Review token lifetimes (access: 15-30 min, refresh: 8 hours)
 - Review session configuration (HttpOnly, Secure, SameSite)
-- Review CORS policies
+- Review same-origin enforcement (Session Gateway entry point)
 - Review rate limiting rules
 - Review NGINX security headers
+- Review M2M client access controls
 
 ### Task 8.5: Documentation
 - Document architecture for team
