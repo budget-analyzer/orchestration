@@ -16,7 +16,6 @@ REPOS=(
     "budget-analyzer-web"
     "session-gateway"
     "token-validation-service"
-    "basic-repository-template"
 )
 
 # Colors for output
