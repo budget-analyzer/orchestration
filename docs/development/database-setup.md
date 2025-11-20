@@ -28,7 +28,7 @@ docker compose up
 
 This will start:
 - Shared PostgreSQL instance on port 5432
-- nginx gateway on port 8080
+- NGINX gateway on port 443 (HTTPS)
 
 The databases are automatically created on first run via initialization scripts in `postgres-init/`.
 

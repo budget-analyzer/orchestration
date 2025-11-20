@@ -96,8 +96,8 @@ for SERVICE_CONFIG in "${SERVICES[@]}"; do
 done
 
 # Also fetch JSON for merging (use gateway endpoints)
-TRANSACTION_SERVICE="http://localhost:8080/api/transaction-service/v3/api-docs"
-CURRENCY_SERVICE="http://localhost:8080/api/currency-service/v3/api-docs"
+TRANSACTION_SERVICE="https://api.budgetanalyzer.localhost/api/transaction-service/v3/api-docs"
+CURRENCY_SERVICE="https://api.budgetanalyzer.localhost/api/currency-service/v3/api-docs"
 
 print_info "Fetching specs for merging..."
 
@@ -140,7 +140,7 @@ UNIFIED_SPEC=$(jq -n \
     },
     "servers": [
         {
-            "url": "http://localhost:8080/api",
+            "url": "https://api.budgetanalyzer.localhost/api",
             "description": "Local environment (via gateway)"
         },
         {
@@ -206,9 +206,9 @@ fi
 echo "  Generate client: openapi-generator-cli generate -i $OUTPUT_JSON -g <generator-name>"
 echo
 print_info "Available via NGINX at:"
-echo "  JSON: http://localhost:8080/api/docs/openapi.json"
+echo "  JSON: https://api.budgetanalyzer.localhost/api/docs/openapi.json"
 if [ "$HAS_YQ" = true ]; then
-    echo "  YAML: http://localhost:8080/api/docs/openapi.yaml"
+    echo "  YAML: https://api.budgetanalyzer.localhost/api/docs/openapi.yaml"
 fi
 echo
 print_info "To regenerate after service updates, run this script again"

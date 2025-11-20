@@ -43,7 +43,8 @@ This document outlines the security architecture for a financial data applicatio
          │
 ┌────────▼─────────────────────────────────────────────────────────┐
 │                    NGINX API Gateway                             │
-│                    Port 8080                                     │
+│                    Port 443 (HTTPS)                              │
+│                    • SSL Termination                             │
 │                    • Request Routing                             │
 │                    • JWT Validation                              │
 │                    • Rate Limiting                               │

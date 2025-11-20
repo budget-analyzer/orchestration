@@ -18,11 +18,11 @@ The docs aggregator consolidates OpenAPI documentation from all microservices in
 ```
 User Browser
     ↓
-http://localhost:8080/api/docs (Swagger UI HTML)
+https://api.budgetanalyzer.localhost/api/docs (Swagger UI HTML)
     ↓
 Loads OpenAPI specs from:
-    - http://localhost:8080/api/transaction-service/v3/api-docs
-    - http://localhost:8080/api/currency-service/v3/api-docs
+    - https://api.budgetanalyzer.localhost/api/transaction-service/v3/api-docs
+    - https://api.budgetanalyzer.localhost/api/currency-service/v3/api-docs
     ↓
 "Try it out" requests → NGINX Gateway → Appropriate Microservice
 ```

@@ -5,19 +5,21 @@ This setup provides an nginx-based API gateway running in Docker that acts as a 
 ## Architecture
 
 ```
-Browser (localhost:8081)
+Browser (https://app.budgetanalyzer.localhost)
     ↓
-Session Gateway (BFF, port 8081) - OAuth2 authentication, session management
+NGINX (port 443, HTTPS) - SSL termination
     ↓
-Nginx Gateway (Docker, port 8080) - JWT validation, routing
+Session Gateway (port 8081, internal) - OAuth2 authentication, session management
+    ↓
+NGINX (https://api.budgetanalyzer.localhost) - JWT validation, routing
     ├─→ / → React App (Vite dev server on localhost:3000)
-    ├─→ /api/transactions → Budget Analyzer API (localhost:8082)
+    ├─→ /api/transactions → Transaction Service (localhost:8082)
     ├─→ /api/currencies → Currency Service (localhost:8084)
     └─→ /health → Health check
 ```
 
 **Key Benefits:**
-- Single origin (`localhost:8081` via Session Gateway) - no CORS issues
+- Single origin (`app.budgetanalyzer.localhost` via NGINX/Session Gateway) - no CORS issues
 - JWT tokens stored server-side in Redis - never exposed to browser (XSS protection)
 - Resource-based routing - frontend doesn't know about microservice architecture
 - Defense in depth - Session Gateway → NGINX validation → Backend authorization
@@ -88,21 +90,21 @@ docker compose up -d
 
 ### 4. Access your app
 
-Open your browser to **`http://localhost:8081`** (Session Gateway, not NGINX or Vite directly)
+Open your browser to **`https://app.budgetanalyzer.localhost`**
 
-All requests (React app, API calls, hot reload) go through Session Gateway (8081) → NGINX (8080).
+All requests (React app, API calls, hot reload) go through NGINX (443) → Session Gateway (8081) → NGINX API (443).
 
 ### 5. Verify it's working
 
 ```bash
-# Session Gateway health check (browser entry point)
-curl http://localhost:8081/health
+# NGINX Gateway health check
+curl https://api.budgetanalyzer.localhost/health
 
-# NGINX health check (internal)
-curl http://localhost:8080/health
+# Session Gateway health check (via NGINX)
+curl https://app.budgetanalyzer.localhost/actuator/health
 
 # React app loads (through Session Gateway)
-curl http://localhost:8081/
+curl https://app.budgetanalyzer.localhost/
 
 # API request requires authentication (through Session Gateway)
 # Browser will be redirected to Auth0 login
@@ -228,9 +230,9 @@ This is the power of resource-based routing!
 
 ### Changing the Gateway Port
 
-Edit `docker compose.yml` and change `"8080:80"` to your desired port (e.g., `"9000:80"`).
+The gateway currently runs on port 443 (HTTPS) with SSL termination. Port configuration is in `docker compose.yml`.
 
-Then access at `http://localhost:9000`.
+To access, use `https://app.budgetanalyzer.localhost` or `https://api.budgetanalyzer.localhost`.
 
 ### Linux Users
 
@@ -290,21 +292,22 @@ location / {
 **Fix:**
 1. Check browser console for WebSocket errors
 2. Verify nginx is proxying WebSocket upgrade headers
-3. Make sure you're accessing via `http://localhost:8081` (Session Gateway) not `:8080` or `:3000`
+3. Make sure you're accessing via `https://app.budgetanalyzer.localhost` (not direct service ports)
 4. Verify Session Gateway is proxying WebSocket connections correctly
 
 ### CORS issues
 
-**You shouldn't have CORS issues!** Everything is same-origin (`localhost:8081` via Session Gateway).
+**You shouldn't have CORS issues!** Everything is same-origin (`app.budgetanalyzer.localhost` via NGINX/Session Gateway).
 
 The BFF (Backend for Frontend) pattern eliminates CORS:
-- Browser sees single origin: `localhost:8081`
-- Session Gateway proxies to NGINX (8080)
-- NGINX proxies to backend services
+- Browser sees single origin: `app.budgetanalyzer.localhost`
+- NGINX proxies to Session Gateway (8081)
+- Session Gateway proxies to NGINX API (api.budgetanalyzer.localhost)
+- NGINX routes to backend services
 - No cross-origin requests = no CORS
 
 If you see CORS errors:
-1. Verify you're accessing via `http://localhost:8081` (Session Gateway, not `:8080` or `:3000`)
+1. Verify you're accessing via `https://app.budgetanalyzer.localhost` (not direct service ports)
 2. Check that `VITE_API_BASE_URL=/api` in `.env` (relative URL, not full URL)
 3. Check Session Gateway is running and configured correctly
 
@@ -329,6 +332,8 @@ extra_hosts:
 
 ## Production Considerations
 
+> **Note**: This local development setup uses HTTPS with mkcert-generated certificates. The current architecture is dev-specific and will likely be replaced by k3s or similar for production parity.
+
 In production, this setup changes slightly:
 
 1. **React app**: Serve static files (from `npm run build`) directly via nginx
@@ -340,6 +345,6 @@ In production, this setup changes slightly:
    - Use service discovery (Kubernetes, Consul, etc.)
    - Or configure actual service IPs/hostnames
 
-3. **Port**: Use port 80 (HTTP) or 443 (HTTPS) instead of 8080
+3. **SSL/TLS**: Use proper certificates from a CA (not mkcert)
 
 The routing logic stays the same - only the upstream targets change!

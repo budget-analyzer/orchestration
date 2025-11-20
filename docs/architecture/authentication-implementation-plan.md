@@ -146,11 +146,11 @@ This plan implements the security architecture defined in `security-architecture
 
 ### Component Overview
 
-- **Session Gateway (BFF)**: Spring Cloud Gateway on port 8081 - manages OAuth flows, stores tokens in Redis, issues session cookies
-- **NGINX Gateway**: Port 8080 - validates JWTs, routes to microservices, serves React frontend
-- **Token Validation Service**: Port 8088 - validates JWT signatures for NGINX (auth_request)
+- **NGINX Gateway**: Port 443 (HTTPS) - SSL termination, validates JWTs, routes to microservices, serves React frontend
+- **Session Gateway (BFF)**: Spring Cloud Gateway on port 8081 (internal) - manages OAuth flows, stores tokens in Redis, issues session cookies
+- **Token Validation Service**: Port 8088 (internal) - validates JWT signatures for NGINX (auth_request)
 - **Auth0**: Identity provider (abstracted behind NGINX /auth/* endpoints)
-- **Backend Services**: Budget API (8082), Currency Service (8084) - enforce data-level authorization
+- **Backend Services**: Transaction Service (8082), Currency Service (8084) - enforce data-level authorization
 
 ### BFF + API Gateway Hybrid Pattern
 
@@ -321,12 +321,12 @@ Machine-to-machine clients bypass Session Gateway and use JWT directly:
    - Handles rate limiting and security headers
 
 4. **Port Summary**
-   - **8081**: Session Gateway - Browser entry point
-   - **8080**: NGINX - API Gateway (all clients)
-   - **8088**: Token Validation Service - JWT validator
-   - **8082**: Transaction Service - Business logic
-   - **8084**: Currency Service - Business logic
-   - **3000**: React Dev Server - Frontend (dev only)
+   - **443**: NGINX Gateway - HTTPS entry point (app.budgetanalyzer.localhost / api.budgetanalyzer.localhost)
+   - **8081**: Session Gateway - Internal (behind NGINX)
+   - **8088**: Token Validation Service - JWT validator (internal)
+   - **8082**: Transaction Service - Business logic (internal)
+   - **8084**: Currency Service - Business logic (internal)
+   - **3000**: React Dev Server - Frontend (dev only, internal)
 
 #### **Web Browser Request Flow (Detailed Steps)**
 
@@ -567,39 +567,40 @@ Machine-to-machine clients bypass Session Gateway and use JWT directly:
 
 ### Task 5.2: Implement Login Flow
 - Create Login component with "Login" button
-- Redirect to Session Gateway: `window.location.href = 'http://localhost:8081/oauth2/authorization/auth0'`
+- Redirect to Session Gateway: `window.location.href = 'https://app.budgetanalyzer.localhost/oauth2/authorization/auth0'`
 - Session Gateway handles OAuth flow, sets session cookie, redirects back to frontend
 
 ### Task 5.3: Implement Logout Flow
 - Create logout function
-- Call Session Gateway logout endpoint: `http://localhost:8081/logout`
+- Call Session Gateway logout endpoint: `https://app.budgetanalyzer.localhost/logout`
 - Clear any local state
 - Redirect to home page
 
 ### Task 5.4: Configure Frontend Base URL
-- **All requests go to Session Gateway (port 8081)**
-- Frontend base URL: `http://localhost:8081`
-- API calls: `http://localhost:8081/api/*` (Session Gateway adds JWT, forwards to NGINX)
-- Static files: `http://localhost:8081/` (Session Gateway proxies to NGINX which serves React)
+- **All requests go through NGINX to Session Gateway**
+- Frontend base URL: `https://app.budgetanalyzer.localhost`
+- API calls: `https://app.budgetanalyzer.localhost/api/*` (Session Gateway adds JWT, forwards to NGINX API)
+- Static files: `https://app.budgetanalyzer.localhost/` (NGINX → Session Gateway → NGINX API → React)
 - Include credentials in fetch: `credentials: 'include'` (for session cookies)
-- **No CORS configuration needed** - same-origin (all requests to port 8081)
+- **No CORS configuration needed** - same-origin (all requests to app.budgetanalyzer.localhost)
 
 ### Task 5.5: Implement Session State Management
 - Check session status on app load
-- Call `/user` endpoint to get current user info: `http://localhost:8081/user`
+- Call `/user` endpoint to get current user info: `https://app.budgetanalyzer.localhost/user`
 - Handle 401 responses (redirect to login)
 - Display user info in UI
 
 ### Task 5.6: Development vs Production Configuration
-- **Development**: Frontend accessed via `http://localhost:8081`
-  - Session Gateway (8081) proxies to NGINX (8080)
-  - NGINX (8080) proxies to Vite dev server (3000) for React app
+- **Development**: Frontend accessed via `https://app.budgetanalyzer.localhost`
+  - NGINX (443) handles SSL and proxies to Session Gateway (8081)
+  - Session Gateway proxies API requests to NGINX API (api.budgetanalyzer.localhost)
+  - NGINX API proxies to Vite dev server (3000) for React app
   - Hot module reload (HMR) works through proxy chain
 - **Production**: Frontend accessed via load balancer (port 80/443)
-  - Load balancer routes to Session Gateway (8081)
-  - Session Gateway proxies to NGINX (8080)
+  - Load balancer routes to NGINX (443)
+  - NGINX routes to Session Gateway or API based on subdomain
   - NGINX serves static React build artifacts
-- **Environment variable**: `VITE_API_BASE_URL` should be relative (`/api`) or point to Session Gateway
+- **Environment variable**: `VITE_API_BASE_URL` should be relative (`/api`)
 
 ---
 
