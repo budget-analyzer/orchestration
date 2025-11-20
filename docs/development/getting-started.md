@@ -60,14 +60,17 @@ docker compose ps
 ```
 
 Access the application:
-- **Frontend (via Session Gateway)**: http://localhost:8081
-- **Unified API Documentation**: http://localhost:8080/api/docs (internal access)
-- **OpenAPI JSON**: http://localhost:8080/api/docs/openapi.json
-- **OpenAPI YAML**: http://localhost:8080/api/docs/openapi.yaml
+- **Application**: https://app.budgetanalyzer.localhost
+- **Unified API Documentation**: https://api.budgetanalyzer.localhost/api/docs
+- **OpenAPI JSON**: https://api.budgetanalyzer.localhost/api/docs/openapi.json
+- **OpenAPI YAML**: https://api.budgetanalyzer.localhost/api/docs/openapi.yaml
 
-**Important**: All browser requests go through Session Gateway: `http://localhost:8081`
-- Session Gateway (8081) handles authentication and proxies to NGINX
-- NGINX (8080) validates JWTs and routes to backend services
+> **Note**: This local development setup uses HTTPS with mkcert-generated certificates. The current architecture is dev-specific and will likely be replaced by k3s or similar in the future.
+
+**Important**: All browser requests go through NGINX to Session Gateway: `https://app.budgetanalyzer.localhost`
+- NGINX (443) handles SSL termination and proxies to Session Gateway (8081)
+- Session Gateway handles authentication and proxies to NGINX API (api.budgetanalyzer.localhost)
+- NGINX validates JWTs and routes to backend services
 
 ### 5. Start Session Gateway and Token Validation Service
 
@@ -114,28 +117,28 @@ npm install
 npm run dev
 ```
 
-The frontend development server runs on port 3000 but is served through Session Gateway (8081) → NGINX (8080) → Vite (3000).
+The frontend development server runs on port 3000 but is served through NGINX (443) → Session Gateway (8081) → NGINX API → Vite (3000).
 
 ## Access Patterns
 
-### Browser Access (via Session Gateway)
+### Browser Access (via NGINX/Session Gateway)
 
-All browser requests go through the **Session Gateway** at `http://localhost:8081`:
+All browser requests go through **NGINX** at `https://app.budgetanalyzer.localhost`:
 
 **Frontend:**
-- Application: `http://localhost:8081/`
-- Login: `http://localhost:8081/oauth2/authorization/auth0`
-- Logout: `http://localhost:8081/logout`
+- Application: `https://app.budgetanalyzer.localhost/`
+- Login: `https://app.budgetanalyzer.localhost/oauth2/authorization/auth0`
+- Logout: `https://app.budgetanalyzer.localhost/logout`
 
 **API Endpoints (authenticated, requires login):**
-- Transactions: `http://localhost:8081/api/v1/transactions`
-- Currencies: `http://localhost:8081/api/v1/currencies`
-- Exchange Rates: `http://localhost:8081/api/v1/exchange-rates`
+- Transactions: `https://app.budgetanalyzer.localhost/api/v1/transactions`
+- Currencies: `https://app.budgetanalyzer.localhost/api/v1/currencies`
+- Exchange Rates: `https://app.budgetanalyzer.localhost/api/v1/exchange-rates`
 
 **Architecture Flow:**
 ```
-Browser → Session Gateway (8081) → NGINX (8080) → Backend Services (8082+)
-         OAuth2/Session           JWT Validation    Business Logic
+Browser → NGINX (443) → Session Gateway (8081) → NGINX API (443) → Backend Services (8082+)
+         SSL/HTTPS      OAuth2/Session           JWT Validation      Business Logic
 ```
 
 ### Internal/Development Access

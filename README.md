@@ -28,8 +28,9 @@ The application follows a microservices architecture with BFF (Backend for Front
 - Docker and Docker Compose
 - JDK 24 (for local Spring Boot development)
 - Node.js 18+ (for local React development)
+- mkcert (for local HTTPS certificates)
 
-**First-time setup**: See [docs/development/getting-started.md](docs/development/getting-started.md)
+**First-time setup**: Run `./scripts/setup-local-https.sh` to generate trusted HTTPS certificates, then see [docs/development/getting-started.md](docs/development/getting-started.md)
 
 ### Running the Application
 
@@ -44,13 +45,15 @@ docker compose logs -f
 docker compose down
 ```
 
-The application will be available at `http://localhost:8081` (Session Gateway)
+The application will be available at `https://app.budgetanalyzer.localhost`
+
+> **Note**: This local development setup uses HTTPS with mkcert-generated certificates for a production-like experience. The current architecture is dev-specific and doesn't fully mirror production yet - it will likely be replaced by k3s or similar in the future.
 
 ### Service Ports
 
-- Session Gateway (BFF): `8081` (browser entry point)
-- API Gateway (NGINX): `8080` (internal routing)
-- Token Validation Service: `8088`
+- NGINX Gateway: `443` (HTTPS - browser entry point for app. and api. subdomains)
+- Session Gateway (BFF): `8081` (internal, behind NGINX)
+- Token Validation Service: `8088` (internal)
 - PostgreSQL: `5432`
 - Redis: `6379`
 - RabbitMQ: `5672` (Management UI: `15672`)

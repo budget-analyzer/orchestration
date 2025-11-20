@@ -69,7 +69,36 @@ git clone https://github.com/budgetanalyzer/budget-analyzer-web.git
 
 **Important:** This side-by-side layout is **required** for cross-repository documentation links to work correctly. Claude Code uses relative paths (e.g., `../service-common/CLAUDE.md`) to navigate between repositories, which only works when repositories are cloned adjacent to each other.
 
-### 2. Start All Services
+### 2. Set Up Local HTTPS
+
+The application uses HTTPS for local development with clean subdomain URLs. Run the setup script to generate trusted local certificates:
+
+```bash
+cd orchestration/
+
+# Install mkcert first (if not installed)
+# macOS:   brew install mkcert nss
+# Linux:   sudo apt install libnss3-tools && curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" && chmod +x mkcert-* && sudo mv mkcert-* /usr/local/bin/mkcert
+# Windows: choco install mkcert
+
+# Run the setup script
+./scripts/dev/setup-local-https.sh
+```
+
+**What this script does:**
+1. Installs a local CA in your system's trust store (browsers will trust it)
+2. Generates wildcard certificate for `*.budgetanalyzer.localhost`
+3. Adds the CA to your JVM truststore (required for Session Gateway)
+4. Cleans up any orphaned certificate files
+
+**Important:** Restart your browser after running this script.
+
+**Troubleshooting SSL issues:**
+- If you get SSL handshake errors, ensure you restart Session Gateway after running the script
+- The script is idempotent - safe to run multiple times
+- Run with `bash -x ./scripts/dev/setup-local-https.sh` for debug output
+
+### 3. Start All Services
 
 ```bash
 cd orchestration/
@@ -91,14 +120,14 @@ docker compose down
 docker compose ps
 
 # Test gateway
-curl http://localhost:8080/health
+curl https://api.budgetanalyzer.localhost/health
 
 # Test backend services
 curl http://localhost:8082/actuator/health  # transaction-service
 curl http://localhost:8084/actuator/health  # currency-service
 
 # Open frontend
-open http://localhost:8080
+open https://app.budgetanalyzer.localhost
 ```
 
 ## Service-by-Service Setup
@@ -171,7 +200,7 @@ npm install
 npm start
 ```
 
-**Frontend will be available at:** http://localhost:8080 (served through NGINX gateway)
+**Frontend will be available at:** https://app.budgetanalyzer.localhost (served through NGINX gateway)
 
 ## Development Workflows
 
@@ -281,8 +310,10 @@ postgresql://budget_analyzer:budget_analyzer@localhost:5432/budget_analyzer
 
 | Service | Port | URL | Notes |
 |---------|------|-----|-------|
-| API Gateway (NGINX) | 8080 | http://localhost:8080 | **Primary access point** |
-| Frontend (React dev server) | 3000 | - | Served through gateway on 8080 |
+| NGINX Gateway | 443 | https://app.budgetanalyzer.localhost | **Primary browser entry point** |
+| NGINX API | 443 | https://api.budgetanalyzer.localhost | API gateway (behind Session Gateway) |
+| Session Gateway | 8081 | - | Internal (behind NGINX) |
+| Frontend (React dev server) | 3000 | - | Internal (behind NGINX) |
 | transaction-service | 8082 | http://localhost:8082 | Direct access for development/debugging |
 | currency-service | 8084 | http://localhost:8084 | Direct access for development/debugging |
 | PostgreSQL | 5432 | localhost:5432 | Database access |
@@ -327,8 +358,8 @@ Activate with:
 Create `.env.local`:
 
 ```bash
-# API Gateway URL
-VITE_API_BASE_URL=http://localhost:8080
+# API Base URL (relative, served through same origin)
+VITE_API_BASE_URL=/api
 
 # Feature flags (optional)
 VITE_ENABLE_ANALYTICS=true
@@ -384,7 +415,7 @@ docker compose ps budget-analyzer-web
 docker logs budget-analyzer-web
 
 # Check if API gateway is accessible
-curl http://localhost:8080/health
+curl https://api.budgetanalyzer.localhost/health
 
 # Rebuild frontend
 docker compose up -d --build budget-analyzer-web
@@ -423,7 +454,7 @@ curl -X POST http://localhost:8084/admin/seed-currencies
 Located in: `transaction-service/src/test/resources/csv-samples/`
 
 **Upload via frontend:**
-1. Go to http://localhost:8080
+1. Go to https://app.budgetanalyzer.localhost
 2. Click "Import"
 3. Select CSV file
 4. Choose bank format

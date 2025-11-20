@@ -59,7 +59,7 @@ location /api/v1/{resource} {
 grep "location /api" nginx/nginx.dev.conf | grep -v "#"
 
 # Test a route
-curl -v http://localhost:8080/api/v1/transactions
+curl -v https://api.budgetanalyzer.localhost/api/v1/transactions
 ```
 
 **Source of truth:** [nginx/nginx.dev.conf](../../nginx/nginx.dev.conf)
@@ -96,10 +96,10 @@ docker compose restart api-gateway
 
 ```bash
 # Health check
-curl http://localhost:8080/api/v1/budgets/health
+curl https://api.budgetanalyzer.localhost/api/v1/budgets/health
 
 # Actual endpoint
-curl http://localhost:8080/api/v1/budgets
+curl https://api.budgetanalyzer.localhost/api/v1/budgets
 ```
 
 ## Refactoring Services

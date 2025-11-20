@@ -62,10 +62,10 @@ Budget Analyzer is a microservices-based financial management system with a Reac
 
 ### Infrastructure Services
 
-**NGINX API Gateway** (Port 8080)
+**NGINX API Gateway** (Port 443, HTTPS)
 - Unified entry point for all API calls
+- SSL/TLS termination
 - Resource-based routing (see [002-resource-based-routing.md](../decisions/002-resource-based-routing.md))
-- TLS termination (production)
 
 **PostgreSQL**
 - Primary database for all services
@@ -188,7 +188,7 @@ docker compose config | grep 'image:' | sort -u
 ### Local Development
 - Docker Compose orchestration
 - Hot reload for all services
-- Ports: 3000 (web), 8080 (gateway), 8082+ (services)
+- HTTPS: https://app.budgetanalyzer.localhost (gateway 443), 8082+ (services internal)
 
 ### Production (Future)
 - Kubernetes deployment

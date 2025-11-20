@@ -206,8 +206,8 @@ Run the setup script to generate trusted local certificates:
 # Linux:   See https://github.com/FiloSottile/mkcert#installation
 # Windows: choco install mkcert
 
-# Generate certificates
-./scripts/setup-local-https.sh
+# Generate certificates and configure JVM truststore
+./scripts/dev/setup-local-https.sh
 ```
 
 This script will:
