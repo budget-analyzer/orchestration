@@ -674,20 +674,136 @@ Create DTOs following strict layer separation:
 - `ResourcePermissionRequest.java`
 - `DelegationRequest.java`
 
+#### Request DTO Definitions
+
+All request DTOs must have:
+1. `@Schema` annotations on every field with `description`, `example`, and `requiredMode`
+2. Bean Validation annotations (`@NotBlank`, `@Size`, etc.) that coordinate with `@Schema`
+
+```java
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record RoleRequest(
+    @Schema(description = "Role name", example = "Project Manager", maxLength = 100,
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Role name is required")
+    @Size(max = 100, message = "Role name must be at most 100 characters")
+    String name,
+
+    @Schema(description = "Role description", example = "Manages project resources and timelines",
+            maxLength = 500, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Size(max = 500, message = "Description must be at most 500 characters")
+    String description,
+
+    @Schema(description = "Parent role ID for hierarchy inheritance", example = "MANAGER",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String parentRoleId
+) {}
+
+public record UserRoleAssignmentRequest(
+    @Schema(description = "Role ID to assign", example = "ACCOUNTANT",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Role ID is required")
+    String roleId,
+
+    @Schema(description = "Organization scope for multi-tenancy", example = "org_123",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String organizationId,
+
+    @Schema(description = "Optional expiration for temporary assignments",
+            example = "2024-12-31T23:59:59Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant expiresAt
+) {}
+
+public record ResourcePermissionRequest(
+    @Schema(description = "User ID to grant permission to", example = "usr_abc123",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "User ID is required")
+    String userId,
+
+    @Schema(description = "Type of resource", example = "account",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Resource type is required")
+    String resourceType,
+
+    @Schema(description = "Specific resource ID", example = "acc_789",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Resource ID is required")
+    String resourceId,
+
+    @Schema(description = "Permission to grant", example = "read",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Permission is required")
+    String permission,
+
+    @Schema(description = "When permission expires", example = "2024-12-31T23:59:59Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant expiresAt,
+
+    @Schema(description = "Reason for granting permission", example = "Audit review access",
+            maxLength = 500, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Size(max = 500, message = "Reason must be at most 500 characters")
+    String reason
+) {}
+
+public record DelegationRequest(
+    @Schema(description = "User ID to delegate to", example = "usr_def456",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Delegatee ID is required")
+    String delegateeId,
+
+    @Schema(description = "Delegation scope: full, read_only, transactions_only",
+            example = "read_only", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Scope is required")
+    String scope,
+
+    @Schema(description = "Type of resource being delegated", example = "account",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String resourceType,
+
+    @Schema(description = "Specific resource IDs (null = all resources of type)",
+            example = "[\"acc_123\", \"acc_456\"]",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String[] resourceIds,
+
+    @Schema(description = "When delegation expires", example = "2024-12-31T23:59:59Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant validUntil
+) {}
+```
+
 #### Service-Layer DTOs (`service/dto/`)
 
 These DTOs are used internally by services to return complex data structures that don't map directly to a single entity. Controllers transform these into API response DTOs.
 
+**Note**: Service-layer DTOs also use `@Schema` annotations for documentation, but these are internal DTOs not exposed directly via API.
+
 ```java
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Contains a user's effective permissions from all sources.
  * Used by PermissionService, transformed to UserPermissionsResponse by controller.
  */
+@Schema(description = "Internal DTO containing all effective permissions for a user")
 public record EffectivePermissions(
+    @Schema(description = "Permission IDs from assigned roles")
     Set<String> rolePermissions,
+
+    @Schema(description = "Resource-specific permissions")
     List<ResourcePermission> resourcePermissions,
+
+    @Schema(description = "Active delegations")
     List<Delegation> delegations
 ) {
+    /**
+     * Combines all permission sources into a single set of permission IDs.
+     *
+     * @return set of all effective permission IDs
+     */
     public Set<String> getAllPermissionIds() {
         var all = new HashSet<>(rolePermissions);
         resourcePermissions.forEach(rp -> all.add(rp.getPermission()));
@@ -699,8 +815,12 @@ public record EffectivePermissions(
  * Contains both delegations given by and received by a user.
  * Used by DelegationService, transformed to DelegationsResponse by controller.
  */
+@Schema(description = "Internal DTO containing delegations summary for a user")
 public record DelegationsSummary(
+    @Schema(description = "Delegations created by this user")
     List<Delegation> given,
+
+    @Schema(description = "Delegations received by this user")
     List<Delegation> received
 ) {}
 
@@ -708,23 +828,43 @@ public record DelegationsSummary(
  * Filter criteria for querying audit logs.
  * Built by controller from query parameters, used by AuditService.
  */
+@Schema(description = "Internal DTO for audit log query filters")
 public record AuditQueryFilter(
+    @Schema(description = "Filter by user ID", example = "usr_abc123")
     String userId,
+
+    @Schema(description = "Start of time range", example = "2024-01-01T00:00:00Z")
     Instant startTime,
+
+    @Schema(description = "End of time range", example = "2024-12-31T23:59:59Z")
     Instant endTime
 ) {}
 ```
 
 #### Response DTO Transformation Pattern
 
-All response DTOs must have a static `from()` factory method for transforming entities/service DTOs:
+All response DTOs must have:
+1. `@Schema` annotations on every field with `description`, `example`, and `requiredMode` (for optional fields)
+2. A static `from()` factory method for transforming entities/service DTOs
 
 ```java
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record RoleResponse(
+    @Schema(description = "Role identifier", example = "MANAGER")
     String id,
+
+    @Schema(description = "Human-readable role name", example = "Manager")
     String name,
+
+    @Schema(description = "Role description", example = "Team oversight and approvals")
     String description,
+
+    @Schema(description = "Parent role ID for hierarchy", example = "ORG_ADMIN",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     String parentRoleId,
+
+    @Schema(description = "When the role was created", example = "2024-01-15T10:30:00Z")
     Instant createdAt
 ) {
     public static RoleResponse from(Role role) {
@@ -739,8 +879,14 @@ public record RoleResponse(
 }
 
 public record UserPermissionsResponse(
+    @Schema(description = "Set of all effective permission IDs from roles",
+            example = "[\"transactions:read\", \"accounts:write\"]")
     Set<String> permissions,
+
+    @Schema(description = "Resource-specific permissions granted to user")
     List<ResourcePermissionResponse> resourcePermissions,
+
+    @Schema(description = "Active delegations granting additional access")
     List<DelegationResponse> delegations
 ) {
     public static UserPermissionsResponse from(EffectivePermissions effective) {
@@ -757,7 +903,10 @@ public record UserPermissionsResponse(
 }
 
 public record DelegationsResponse(
+    @Schema(description = "Delegations created by this user")
     List<DelegationResponse> given,
+
+    @Schema(description = "Delegations received by this user")
     List<DelegationResponse> received
 ) {
     public static DelegationsResponse from(DelegationsSummary summary) {
@@ -767,6 +916,267 @@ public record DelegationsResponse(
         );
     }
 }
+
+public record DelegationResponse(
+    @Schema(description = "Delegation ID", example = "123")
+    Long id,
+
+    @Schema(description = "User who created the delegation", example = "usr_abc123")
+    String delegatorId,
+
+    @Schema(description = "User who received the delegation", example = "usr_def456")
+    String delegateeId,
+
+    @Schema(description = "Delegation scope", example = "read_only")
+    String scope,
+
+    @Schema(description = "Type of resource being delegated", example = "account",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String resourceType,
+
+    @Schema(description = "Specific resource IDs if not delegating all",
+            example = "[\"acc_123\", \"acc_456\"]",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String[] resourceIds,
+
+    @Schema(description = "When delegation becomes active", example = "2024-01-15T10:30:00Z")
+    Instant validFrom,
+
+    @Schema(description = "When delegation expires", example = "2024-12-31T23:59:59Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant validUntil,
+
+    @Schema(description = "When delegation was revoked", example = "2024-06-15T14:00:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant revokedAt
+) {
+    public static DelegationResponse from(Delegation delegation) {
+        return new DelegationResponse(
+            delegation.getId(),
+            delegation.getDelegatorId(),
+            delegation.getDelegateeId(),
+            delegation.getScope(),
+            delegation.getResourceType(),
+            delegation.getResourceIds(),
+            delegation.getValidFrom(),
+            delegation.getValidUntil(),
+            delegation.getRevokedAt()
+        );
+    }
+}
+
+public record ResourcePermissionResponse(
+    @Schema(description = "Resource permission ID", example = "456")
+    Long id,
+
+    @Schema(description = "User ID granted permission", example = "usr_abc123")
+    String userId,
+
+    @Schema(description = "Type of resource", example = "account")
+    String resourceType,
+
+    @Schema(description = "Specific resource ID", example = "acc_789")
+    String resourceId,
+
+    @Schema(description = "Permission granted", example = "read")
+    String permission,
+
+    @Schema(description = "When permission was granted", example = "2024-01-15T10:30:00Z")
+    Instant grantedAt,
+
+    @Schema(description = "Who granted the permission", example = "usr_admin",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String grantedBy,
+
+    @Schema(description = "When permission expires", example = "2024-12-31T23:59:59Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    Instant expiresAt,
+
+    @Schema(description = "Reason for granting permission", example = "Temporary access for audit",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String reason
+) {
+    public static ResourcePermissionResponse from(ResourcePermission rp) {
+        return new ResourcePermissionResponse(
+            rp.getId(),
+            rp.getUserId(),
+            rp.getResourceType(),
+            rp.getResourceId(),
+            rp.getPermission(),
+            rp.getGrantedAt(),
+            rp.getGrantedBy(),
+            rp.getExpiresAt(),
+            rp.getReason()
+        );
+    }
+}
+
+public record AuditLogResponse(
+    @Schema(description = "Audit log entry ID", example = "789")
+    Long id,
+
+    @Schema(description = "When the event occurred", example = "2024-01-15T10:30:00Z")
+    Instant timestamp,
+
+    @Schema(description = "User who performed the action", example = "usr_abc123",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String userId,
+
+    @Schema(description = "Action performed", example = "ROLE_ASSIGNED")
+    String action,
+
+    @Schema(description = "Type of resource affected", example = "user-role",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String resourceType,
+
+    @Schema(description = "ID of resource affected", example = "usr_def456",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String resourceId,
+
+    @Schema(description = "Access decision", example = "GRANTED")
+    String decision,
+
+    @Schema(description = "Reason for decision", example = "User has required permission",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    String reason
+) {
+    public static AuditLogResponse from(AuthorizationAuditLog log) {
+        return new AuditLogResponse(
+            log.getId(),
+            log.getTimestamp(),
+            log.getUserId(),
+            log.getAction(),
+            log.getResourceType(),
+            log.getResourceId(),
+            log.getDecision(),
+            log.getReason()
+        );
+    }
+}
+```
+
+### 3.3 Package Structure and DTO Boundaries
+
+#### Package Organization
+
+```
+org.budgetanalyzer.permission/
+├── PermissionServiceApplication.java
+├── api/
+│   ├── UserPermissionController.java
+│   ├── RoleController.java
+│   ├── ResourcePermissionController.java
+│   ├── DelegationController.java
+│   ├── AuditController.java
+│   ├── request/                    # API request DTOs
+│   │   ├── RoleRequest.java
+│   │   ├── UserRoleAssignmentRequest.java
+│   │   ├── ResourcePermissionRequest.java
+│   │   └── DelegationRequest.java
+│   └── response/                   # API response DTOs
+│       ├── RoleResponse.java
+│       ├── UserPermissionsResponse.java
+│       ├── DelegationResponse.java
+│       ├── DelegationsResponse.java
+│       ├── ResourcePermissionResponse.java
+│       └── AuditLogResponse.java
+├── config/
+│   ├── OpenApiConfig.java
+│   └── AsyncConfig.java
+├── domain/                         # JPA entities
+│   ├── User.java
+│   ├── Role.java
+│   ├── Permission.java
+│   ├── UserRole.java
+│   ├── RolePermission.java
+│   ├── ResourcePermission.java
+│   ├── Delegation.java
+│   └── AuthorizationAuditLog.java
+├── repository/                     # Spring Data JPA repositories
+│   ├── UserRepository.java
+│   ├── RoleRepository.java
+│   ├── PermissionRepository.java
+│   ├── UserRoleRepository.java
+│   ├── RolePermissionRepository.java
+│   ├── ResourcePermissionRepository.java
+│   ├── DelegationRepository.java
+│   └── AuditLogRepository.java
+├── service/
+│   ├── dto/                        # Service-layer DTOs (internal)
+│   │   ├── EffectivePermissions.java
+│   │   ├── DelegationsSummary.java
+│   │   └── AuditQueryFilter.java
+│   ├── exception/                  # Custom exceptions
+│   │   ├── PermissionDeniedException.java
+│   │   ├── ProtectedRoleException.java
+│   │   └── DuplicateRoleAssignmentException.java
+│   ├── PermissionService.java
+│   ├── RoleService.java
+│   ├── DelegationService.java
+│   ├── UserService.java
+│   ├── UserSyncService.java
+│   ├── AuditService.java
+│   ├── ResourcePermissionService.java
+│   ├── CascadingRevocationService.java
+│   └── PermissionCacheService.java
+└── event/                          # Domain events
+    └── PermissionChangeEvent.java
+```
+
+#### DTO Boundary Rules
+
+**CRITICAL**: Strict separation between API and service layers.
+
+| DTO Type | Package | Used By | Returns To |
+|----------|---------|---------|------------|
+| Request DTOs | `api/request/` | Controllers only | N/A |
+| Response DTOs | `api/response/` | Controllers only | API clients |
+| Service DTOs | `service/dto/` | Services | Controllers |
+| Entities | `domain/` | Repositories, Services | Services |
+
+**Data Flow Pattern**:
+```
+API Request → Controller → [transform to primitives/service DTOs] → Service → Repository
+                                                                      ↓
+API Response ← Controller ← [transform via Response.from()] ← Service-layer DTO/Entity
+```
+
+**Rules**:
+1. **Services NEVER accept API request DTOs** - Controllers must extract primitives or build service DTOs
+2. **Services NEVER return API response DTOs** - They return entities or service-layer DTOs
+3. **Controllers transform using `Response.from()`** - All response DTOs have static factory methods
+4. **Service DTOs are for complex aggregates** - When returning data that doesn't map to a single entity
+
+**Example - Correct Pattern**:
+```java
+// Controller - transforms API DTO to primitives for service
+@PostMapping
+public ResponseEntity<RoleResponse> createRole(@RequestBody @Valid RoleRequest request) {
+    var created = roleService.createRole(
+        request.name(),           // Extract primitives
+        request.description(),
+        request.parentRoleId()
+    );
+    return ResponseEntity.created(location).body(RoleResponse.from(created));
+}
+
+// Service - accepts primitives, returns entity
+@Transactional
+public Role createRole(String name, String description, String parentRoleId) {
+    var role = new Role();
+    role.setName(name);
+    // ...
+    return roleRepository.save(role);
+}
+```
+
+**Example - Incorrect Pattern (DO NOT DO)**:
+```java
+// WRONG - Service accepting API DTO
+public Role createRole(RoleRequest request) { ... }
+
+// WRONG - Service returning API response DTO
+public RoleResponse getRole(String id) { ... }
 ```
 
 ---
@@ -918,6 +1328,51 @@ public interface AuditLogRepository extends JpaRepository<AuthorizationAuditLog,
 
 Create in `service/`:
 
+#### Custom Exceptions
+
+The permission service uses custom exceptions that extend the service-web exception hierarchy:
+
+```java
+import org.budgetanalyzer.service.exception.BusinessException;
+
+/**
+ * Thrown when a user attempts an operation they don't have permission for.
+ * Results in HTTP 403 Forbidden.
+ */
+public class PermissionDeniedException extends BusinessException {
+
+    public PermissionDeniedException(String message) {
+        super(message, "PERMISSION_DENIED");
+    }
+
+    public PermissionDeniedException(String message, String errorCode) {
+        super(message, errorCode);
+    }
+}
+
+/**
+ * Thrown when trying to assign/revoke protected roles via API.
+ * Results in HTTP 403 Forbidden.
+ */
+public class ProtectedRoleException extends BusinessException {
+
+    public ProtectedRoleException(String message) {
+        super(message, "PROTECTED_ROLE_VIOLATION");
+    }
+}
+
+/**
+ * Thrown when a user already has an active role assignment.
+ * Results in HTTP 422 Unprocessable Entity.
+ */
+public class DuplicateRoleAssignmentException extends BusinessException {
+
+    public DuplicateRoleAssignmentException(String userId, String roleId) {
+        super("User " + userId + " already has role " + roleId, "DUPLICATE_ROLE_ASSIGNMENT");
+    }
+}
+```
+
 #### PermissionService.java
 
 Main permission operations:
@@ -988,7 +1443,8 @@ public class PermissionService {
     public void assignRole(String userId, String roleId, String grantedBy) {
         // 1. SYSTEM_ADMIN cannot be assigned via API - database only
         if (PROTECTED_ROLE.equals(roleId)) {
-            throw new AccessDeniedException("SYSTEM_ADMIN role cannot be assigned via API. Use database directly.");
+            throw new ProtectedRoleException(
+                "SYSTEM_ADMIN role cannot be assigned via API. Use database directly.");
         }
 
         // 2. Check granter has permission to assign this role level
@@ -996,19 +1452,25 @@ public class PermissionService {
 
         if (ELEVATED_ROLES.contains(roleId)) {
             if (!granterPermissions.contains("user-roles:assign-elevated")) {
-                throw new AccessDeniedException("Cannot assign elevated role: " + roleId +
-                    ". Requires 'user-roles:assign-elevated' permission.");
+                throw new PermissionDeniedException(
+                    "Cannot assign elevated role: " + roleId +
+                    ". Requires 'user-roles:assign-elevated' permission.",
+                    "INSUFFICIENT_PERMISSION_FOR_ELEVATED_ROLE");
             }
         } else if (BASIC_ROLES.contains(roleId)) {
             if (!granterPermissions.contains("user-roles:assign-basic") &&
                 !granterPermissions.contains("user-roles:assign-elevated")) {
-                throw new AccessDeniedException("Cannot assign role: " + roleId +
-                    ". Requires 'user-roles:assign-basic' permission.");
+                throw new PermissionDeniedException(
+                    "Cannot assign role: " + roleId +
+                    ". Requires 'user-roles:assign-basic' permission.",
+                    "INSUFFICIENT_PERMISSION_FOR_BASIC_ROLE");
             }
         } else {
             // Custom role - require elevated permission
             if (!granterPermissions.contains("user-roles:assign-elevated")) {
-                throw new AccessDeniedException("Cannot assign custom role: " + roleId);
+                throw new PermissionDeniedException(
+                    "Cannot assign custom role: " + roleId,
+                    "INSUFFICIENT_PERMISSION_FOR_CUSTOM_ROLE");
             }
         }
 
@@ -1022,7 +1484,7 @@ public class PermissionService {
 
         // 5. Check if active assignment already exists
         if (userRoleRepository.findByUserIdAndRoleIdAndRevokedAtIsNull(userId, roleId).isPresent()) {
-            throw new IllegalStateException("User already has this role");
+            throw new DuplicateRoleAssignmentException(userId, roleId);
         }
 
         // 6. Create new UserRole entry (re-granting creates new row)
@@ -1044,13 +1506,16 @@ public class PermissionService {
     public void revokeRole(String userId, String roleId, String revokedBy) {
         // 1. SYSTEM_ADMIN role cannot be revoked via API
         if (PROTECTED_ROLE.equals(roleId)) {
-            throw new AccessDeniedException("SYSTEM_ADMIN role cannot be revoked via API. Use database directly.");
+            throw new ProtectedRoleException(
+                "SYSTEM_ADMIN role cannot be revoked via API. Use database directly.");
         }
 
         // 2. Check revoker has permission
         var revokerPermissions = getEffectivePermissions(revokedBy).getAllPermissionIds();
         if (!revokerPermissions.contains("user-roles:revoke")) {
-            throw new AccessDeniedException("Cannot revoke roles. Requires 'user-roles:revoke' permission.");
+            throw new PermissionDeniedException(
+                "Cannot revoke roles. Requires 'user-roles:revoke' permission.",
+                "INSUFFICIENT_PERMISSION_FOR_REVOKE");
         }
 
         // 3. Find active UserRole entry
@@ -1639,6 +2104,15 @@ Create in `api/`:
 #### UserPermissionController.java
 
 ```java
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.budgetanalyzer.service.api.ApiErrorResponse;
+
 @Tag(name = "User Permissions", description = "User permission management")
 @RestController
 @RequestMapping("/v1/users")
@@ -1653,7 +2127,22 @@ public class UserPermissionController {
         this.userSyncService = userSyncService;
     }
 
-    @Operation(summary = "Get current user's permissions")
+    @Operation(
+        summary = "Get current user's permissions",
+        description = "Returns all effective permissions for the authenticated user including role-based, resource-specific, and delegated permissions"
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Permissions retrieved successfully",
+            content = @Content(schema = @Schema(implementation = UserPermissionsResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/me/permissions")
     @PreAuthorize("isAuthenticated()")
     public UserPermissionsResponse getCurrentUserPermissions(Authentication auth) {
@@ -1663,44 +2152,132 @@ public class UserPermissionController {
         return UserPermissionsResponse.from(permissions);
     }
 
-    @Operation(summary = "Get user's permissions (requires users:read)")
+    @Operation(
+        summary = "Get user's permissions",
+        description = "Returns all effective permissions for a specified user. Requires users:read permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Permissions retrieved successfully",
+            content = @Content(schema = @Schema(implementation = UserPermissionsResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/{id}/permissions")
     @PreAuthorize("hasAuthority('users:read')")
-    public UserPermissionsResponse getUserPermissions(@PathVariable String id) {
+    public UserPermissionsResponse getUserPermissions(
+            @Parameter(description = "User ID", example = "usr_abc123")
+            @PathVariable String id) {
         var permissions = permissionService.getEffectivePermissions(id);
 
         return UserPermissionsResponse.from(permissions);
     }
 
-    @Operation(summary = "Get user's roles")
+    @Operation(
+        summary = "Get user's roles",
+        description = "Returns all active roles assigned to a user. User can view their own roles or requires users:read permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Roles retrieved successfully",
+            content = @Content(schema = @Schema(implementation = RoleResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/{id}/roles")
     @PreAuthorize("hasAuthority('users:read') or #id == authentication.name")
-    public List<RoleResponse> getUserRoles(@PathVariable String id) {
+    public List<RoleResponse> getUserRoles(
+            @Parameter(description = "User ID", example = "usr_abc123")
+            @PathVariable String id) {
         return permissionService.getUserRoles(id).stream()
             .map(RoleResponse::from)
             .toList();
     }
 
-    @Operation(summary = "Assign role to user")
-    @ApiResponse(responseCode = "204", description = "Role assigned successfully")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions for this role level")
+    @Operation(
+        summary = "Assign role to user",
+        description = "Assigns a role to a user with governance checks. Basic roles require 'user-roles:assign-basic', elevated roles require 'user-roles:assign-elevated'."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Role assigned successfully"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions for this role level",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User or role not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "422",
+            description = "User already has this role or protected role violation",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @PostMapping("/{id}/roles")
     @PreAuthorize("hasAuthority('user-roles:assign-basic') or hasAuthority('user-roles:assign-elevated')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void assignRole(
+            @Parameter(description = "User ID", example = "usr_abc123")
             @PathVariable String id,
             @RequestBody @Valid UserRoleAssignmentRequest request) {
         // Service layer enforces role-level restrictions
         var grantedBy = SecurityContextUtil.getCurrentUserId();
-        permissionService.assignRole(id, request.getRoleId(), grantedBy);
+        permissionService.assignRole(id, request.roleId(), grantedBy);
     }
 
-    @Operation(summary = "Revoke role from user")
+    @Operation(
+        summary = "Revoke role from user",
+        description = "Revokes a role from a user. Requires 'user-roles:revoke' permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Role revoked successfully"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions or protected role",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Active role assignment not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @DeleteMapping("/{id}/roles/{roleId}")
     @PreAuthorize("hasAuthority('user-roles:revoke')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revokeRole(
+            @Parameter(description = "User ID", example = "usr_abc123")
             @PathVariable String id,
+            @Parameter(description = "Role ID to revoke", example = "ACCOUNTANT")
             @PathVariable String roleId) {
         var revokedBy = SecurityContextUtil.getCurrentUserId();
         permissionService.revokeRole(id, roleId, revokedBy);
@@ -1711,7 +2288,7 @@ public class UserPermissionController {
 #### RoleController.java
 
 ```java
-@Tag(name = "Roles", description = "Role management")
+@Tag(name = "Roles", description = "Role management - CRUD operations for authorization roles")
 @RestController
 @RequestMapping("/v1/roles")
 public class RoleController {
@@ -1722,7 +2299,22 @@ public class RoleController {
         this.roleService = roleService;
     }
 
-    @Operation(summary = "List all roles")
+    @Operation(
+        summary = "List all roles",
+        description = "Returns all active (non-deleted) roles. Requires 'roles:read' permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Roles retrieved successfully",
+            content = @Content(schema = @Schema(implementation = RoleResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping
     @PreAuthorize("hasAuthority('roles:read')")
     public List<RoleResponse> getAllRoles() {
@@ -1731,21 +2323,63 @@ public class RoleController {
             .toList();
     }
 
-    @Operation(summary = "Get role by ID")
+    @Operation(
+        summary = "Get role by ID",
+        description = "Returns a specific role by ID. Requires 'roles:read' permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Role retrieved successfully",
+            content = @Content(schema = @Schema(implementation = RoleResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Role not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('roles:read')")
-    public RoleResponse getRole(@PathVariable String id) {
+    public RoleResponse getRole(
+            @Parameter(description = "Role ID", example = "MANAGER")
+            @PathVariable String id) {
         return RoleResponse.from(roleService.getRole(id));
     }
 
-    @Operation(summary = "Create new role (SYSTEM_ADMIN only)")
+    @Operation(
+        summary = "Create new role",
+        description = "Creates a new role. Requires 'roles:write' permission (SYSTEM_ADMIN only)."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "Role created successfully",
+            content = @Content(schema = @Schema(implementation = RoleResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @PostMapping
     @PreAuthorize("hasAuthority('roles:write')")
     public ResponseEntity<RoleResponse> createRole(@RequestBody @Valid RoleRequest request) {
         var created = roleService.createRole(
-            request.getName(),
-            request.getDescription(),
-            request.getParentRoleId()
+            request.name(),
+            request.description(),
+            request.parentRoleId()
         );
 
         var location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -1756,25 +2390,72 @@ public class RoleController {
         return ResponseEntity.created(location).body(RoleResponse.from(created));
     }
 
-    @Operation(summary = "Update role (SYSTEM_ADMIN only)")
+    @Operation(
+        summary = "Update role",
+        description = "Updates an existing role. Requires 'roles:write' permission (SYSTEM_ADMIN only)."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Role updated successfully",
+            content = @Content(schema = @Schema(implementation = RoleResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Role not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('roles:write')")
     public RoleResponse updateRole(
+            @Parameter(description = "Role ID", example = "MANAGER")
             @PathVariable String id,
             @RequestBody @Valid RoleRequest request) {
         return RoleResponse.from(roleService.updateRole(
             id,
-            request.getName(),
-            request.getDescription(),
-            request.getParentRoleId()
+            request.name(),
+            request.description(),
+            request.parentRoleId()
         ));
     }
 
-    @Operation(summary = "Delete role (SYSTEM_ADMIN only)")
+    @Operation(
+        summary = "Delete role",
+        description = "Soft-deletes a role and cascades revocation to all assignments. Requires 'roles:delete' permission (SYSTEM_ADMIN only)."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Role deleted successfully"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Role not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('roles:delete')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteRole(@PathVariable String id) {
+    public void deleteRole(
+            @Parameter(description = "Role ID", example = "MANAGER")
+            @PathVariable String id) {
         var deletedBy = SecurityContextUtil.getCurrentUserId();
         roleService.deleteRole(id, deletedBy);
     }
@@ -1784,7 +2465,7 @@ public class RoleController {
 #### ResourcePermissionController.java
 
 ```java
-@Tag(name = "Resource Permissions", description = "Fine-grained resource permissions")
+@Tag(name = "Resource Permissions", description = "Fine-grained permissions for specific resource instances")
 @RestController
 @RequestMapping("/v1/resource-permissions")
 public class ResourcePermissionController {
@@ -1795,19 +2476,44 @@ public class ResourcePermissionController {
         this.resourcePermissionService = resourcePermissionService;
     }
 
-    @Operation(summary = "Grant resource-specific permission")
+    @Operation(
+        summary = "Grant resource-specific permission",
+        description = "Grants a permission for a specific resource instance to a user. Requires admin role or ownership of the resource."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "Permission granted successfully",
+            content = @Content(schema = @Schema(implementation = ResourcePermissionResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN') or @authzService.canGrantResourcePermission(authentication, #request)")
+    @PreAuthorize("hasAuthority('permissions:write') or @authzService.canGrantResourcePermission(authentication, #request)")
     public ResponseEntity<ResourcePermissionResponse> grantPermission(
             @RequestBody @Valid ResourcePermissionRequest request) {
         var grantedBy = SecurityContextUtil.getCurrentUserId();
         var created = resourcePermissionService.grantPermission(
-            request.getUserId(),
-            request.getResourceType(),
-            request.getResourceId(),
-            request.getPermission(),
-            request.getExpiresAt(),
-            request.getReason(),
+            request.userId(),
+            request.resourceType(),
+            request.resourceId(),
+            request.permission(),
+            request.expiresAt(),
+            request.reason(),
             grantedBy
         );
 
@@ -1819,19 +2525,56 @@ public class ResourcePermissionController {
         return ResponseEntity.created(location).body(ResourcePermissionResponse.from(created));
     }
 
-    @Operation(summary = "Revoke resource-specific permission")
+    @Operation(
+        summary = "Revoke resource-specific permission",
+        description = "Revokes a resource-specific permission. Requires admin permissions."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Permission revoked successfully"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Resource permission not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('permissions:write')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revokePermission(@PathVariable Long id) {
+    public void revokePermission(
+            @Parameter(description = "Resource permission ID", example = "456")
+            @PathVariable Long id) {
         var revokedBy = SecurityContextUtil.getCurrentUserId();
         resourcePermissionService.revokePermission(id, revokedBy);
     }
 
-    @Operation(summary = "Get resource permissions for user")
+    @Operation(
+        summary = "Get resource permissions for user",
+        description = "Returns all active resource-specific permissions for a user. User can view their own or requires admin permissions."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Permissions retrieved successfully",
+            content = @Content(schema = @Schema(implementation = ResourcePermissionResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/user/{userId}")
-    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.name")
+    @PreAuthorize("hasAuthority('permissions:read') or #userId == authentication.name")
     public List<ResourcePermissionResponse> getUserResourcePermissions(
+            @Parameter(description = "User ID", example = "usr_abc123")
             @PathVariable String userId) {
         return resourcePermissionService.getForUser(userId).stream()
             .map(ResourcePermissionResponse::from)
@@ -1843,7 +2586,7 @@ public class ResourcePermissionController {
 #### DelegationController.java
 
 ```java
-@Tag(name = "Delegations", description = "User-to-user permission delegations")
+@Tag(name = "Delegations", description = "User-to-user permission delegations for shared access")
 @RestController
 @RequestMapping("/v1/delegations")
 @PreAuthorize("isAuthenticated()")
@@ -1855,7 +2598,22 @@ public class DelegationController {
         this.delegationService = delegationService;
     }
 
-    @Operation(summary = "Get user's delegations (given and received)")
+    @Operation(
+        summary = "Get user's delegations",
+        description = "Returns all delegations given by and received by the authenticated user"
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Delegations retrieved successfully",
+            content = @Content(schema = @Schema(implementation = DelegationsResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Not authenticated",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping
     public DelegationsResponse getDelegations() {
         var userId = SecurityContextUtil.getCurrentUserId();
@@ -1864,18 +2622,38 @@ public class DelegationController {
         return DelegationsResponse.from(summary);
     }
 
-    @Operation(summary = "Create delegation")
+    @Operation(
+        summary = "Create delegation",
+        description = "Creates a new delegation to share access with another user. The authenticated user becomes the delegator."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "Delegation created successfully",
+            content = @Content(schema = @Schema(implementation = DelegationResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Delegatee not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @PostMapping
     public ResponseEntity<DelegationResponse> createDelegation(
             @RequestBody @Valid DelegationRequest request) {
         var delegatorId = SecurityContextUtil.getCurrentUserId();
         var created = delegationService.createDelegation(
             delegatorId,
-            request.getDelegateeId(),
-            request.getScope(),
-            request.getResourceType(),
-            request.getResourceIds(),
-            request.getValidUntil()
+            request.delegateeId(),
+            request.scope(),
+            request.resourceType(),
+            request.resourceIds(),
+            request.validUntil()
         );
 
         var location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -1886,10 +2664,31 @@ public class DelegationController {
         return ResponseEntity.created(location).body(DelegationResponse.from(created));
     }
 
-    @Operation(summary = "Revoke delegation")
+    @Operation(
+        summary = "Revoke delegation",
+        description = "Revokes a delegation. Only the delegator can revoke their own delegations."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "Delegation revoked successfully"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Not authorized to revoke this delegation",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Delegation not found",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revokeDelegation(@PathVariable Long id) {
+    public void revokeDelegation(
+            @Parameter(description = "Delegation ID", example = "123")
+            @PathVariable Long id) {
         var revokedBy = SecurityContextUtil.getCurrentUserId();
         delegationService.revokeDelegation(id, revokedBy);
     }
@@ -1899,7 +2698,7 @@ public class DelegationController {
 #### AuditController.java
 
 ```java
-@Tag(name = "Audit", description = "Authorization audit logs")
+@Tag(name = "Audit", description = "Authorization audit logs for compliance and investigation")
 @RestController
 @RequestMapping("/v1/audit")
 @PreAuthorize("hasAuthority('audit:read')")
@@ -1911,11 +2710,29 @@ public class AuditController {
         this.auditService = auditService;
     }
 
-    @Operation(summary = "Query audit log")
+    @Operation(
+        summary = "Query audit log",
+        description = "Queries authorization audit logs with optional filters for user and time range. Requires 'audit:read' permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Audit logs retrieved successfully",
+            content = @Content(schema = @Schema(implementation = AuditLogResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping
     public Page<AuditLogResponse> getAuditLog(
+            @Parameter(description = "Filter by user ID", example = "usr_abc123")
             @RequestParam(required = false) String userId,
+            @Parameter(description = "Start of time range (ISO-8601)", example = "2024-01-01T00:00:00Z")
             @RequestParam(required = false) Instant startTime,
+            @Parameter(description = "End of time range (ISO-8601)", example = "2024-12-31T23:59:59Z")
             @RequestParam(required = false) Instant endTime,
             @ParameterObject Pageable pageable) {
         var filter = new AuditQueryFilter(userId, startTime, endTime);
@@ -1924,9 +2741,25 @@ public class AuditController {
         return logs.map(AuditLogResponse::from);
     }
 
-    @Operation(summary = "Get audit log for specific user")
+    @Operation(
+        summary = "Get audit log for specific user",
+        description = "Returns all audit log entries for a specific user. Requires 'audit:read' permission."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Audit logs retrieved successfully",
+            content = @Content(schema = @Schema(implementation = AuditLogResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     @GetMapping("/users/{userId}")
     public Page<AuditLogResponse> getUserAudit(
+            @Parameter(description = "User ID", example = "usr_abc123")
             @PathVariable String userId,
             @ParameterObject Pageable pageable) {
         var logs = auditService.queryByUser(userId, pageable);
@@ -2167,7 +3000,123 @@ location /api/v1/audit {
 
 Use H2 in-memory database with PostgreSQL mode and TestSecurityConfig from service-common.
 
-### 9.2 Test Classes
+### 9.2 Test Patterns and Conventions
+
+#### Test Naming Conventions
+
+Use camelCase for test method names (no underscores per project conventions):
+
+```java
+// CORRECT - camelCase method names
+@Test
+void assignRoleShouldSucceedWhenUserHasBasicAssignPermission() { }
+
+@Test
+void assignRoleShouldThrowWhenAttemptingToAssignSystemAdmin() { }
+
+@Test
+void revokeRoleShouldThrowWhenUserLacksRevokePermission() { }
+
+// INCORRECT - underscores
+@Test
+void assign_role_should_succeed_when_user_has_permission() { }
+```
+
+#### TestConstants Pattern
+
+Create a `TestConstants` class for reusable test data:
+
+```java
+public final class TestConstants {
+
+    private TestConstants() {
+        // Utility class
+    }
+
+    // User IDs
+    public static final String TEST_USER_ID = "usr_test123";
+    public static final String TEST_ADMIN_ID = "usr_admin456";
+    public static final String TEST_MANAGER_ID = "usr_manager789";
+
+    // Role IDs
+    public static final String ROLE_USER = "USER";
+    public static final String ROLE_ADMIN = "SYSTEM_ADMIN";
+    public static final String ROLE_MANAGER = "MANAGER";
+    public static final String ROLE_ACCOUNTANT = "ACCOUNTANT";
+
+    // Permissions
+    public static final String PERM_USERS_READ = "users:read";
+    public static final String PERM_ROLES_WRITE = "roles:write";
+    public static final String PERM_ASSIGN_BASIC = "user-roles:assign-basic";
+    public static final String PERM_ASSIGN_ELEVATED = "user-roles:assign-elevated";
+
+    // Auth0 test subjects
+    public static final String TEST_AUTH0_SUB = "auth0|test123";
+    public static final String TEST_EMAIL = "test@example.com";
+}
+```
+
+#### API Error Response Contract Testing
+
+When testing error responses, only assert on stable contract fields to avoid brittle tests:
+
+```java
+@Test
+void assignRoleShouldReturnForbiddenWhenUserLacksPermission() throws Exception {
+    // Arrange
+    var request = new UserRoleAssignmentRequest("MANAGER", null, null);
+
+    // Act & Assert
+    mockMvc.perform(post("/v1/users/{id}/roles", TestConstants.TEST_USER_ID)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isForbidden())
+        // Only assert on stable contract fields
+        .andExpect(jsonPath("$.type").value("PERMISSION_DENIED"))
+        .andExpect(jsonPath("$.status").value(403))
+        // DO NOT assert on message text - it may change
+        .andExpect(jsonPath("$.title").exists());
+}
+
+@Test
+void createRoleShouldReturnBadRequestWhenNameIsBlank() throws Exception {
+    // Arrange
+    var request = new RoleRequest("", "description", null);
+
+    // Act & Assert
+    mockMvc.perform(post("/v1/roles")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.type").value("VALIDATION_ERROR"))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.fieldErrors").isArray())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("name"));
+}
+```
+
+#### JwtTestBuilder Usage
+
+Use JwtTestBuilder from service-web for testing secured endpoints:
+
+```java
+@Test
+void getUserPermissionsShouldSucceedWithValidJwt() throws Exception {
+    // Arrange - use JwtTestBuilder to create test JWT
+    var jwt = JwtTestBuilder.create()
+        .withSubject(TestConstants.TEST_USER_ID)
+        .withPermissions(TestConstants.PERM_USERS_READ)
+        .build();
+
+    // Act & Assert
+    mockMvc.perform(get("/v1/users/{id}/permissions", TestConstants.TEST_USER_ID)
+            .with(jwt(jwt)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.permissions").isArray());
+}
+```
+
+### 9.3 Test Classes
 
 | Test Class | Purpose |
 |------------|---------|
@@ -2181,7 +3130,7 @@ Use H2 in-memory database with PostgreSQL mode and TestSecurityConfig from servi
 | `CascadingRevocationServiceTest.java` | Test cascading revocation on soft delete |
 | `PointInTimeQueryTest.java` | Test temporal queries |
 
-### 9.3 Key Test Scenarios
+### 9.4 Key Test Scenarios
 
 **Permission Computation:**
 1. User with multiple roles gets combined permissions
@@ -2242,18 +3191,25 @@ Use H2 in-memory database with PostgreSQL mode and TestSecurityConfig from servi
 
 ## Files to Create (Summary)
 
-### Source Files (~40 files)
+### Source Files (~45 files)
 
 - 1 Application class
 - 8 Domain entities
-- 7 Repositories
+- 8 Repositories
 - 9 Services (PermissionService, RoleService, DelegationService, UserService, UserSyncService, AuditService, ResourcePermissionService, CascadingRevocationService, PermissionCacheService)
 - 5 Controllers (UserPermissionController, RoleController, ResourcePermissionController, DelegationController, AuditController)
-- 3 Config classes (OpenApiConfig, SecurityConfig, AsyncConfig)
-- ~12 DTOs:
-  - 6 API Response DTOs (api/response/)
-  - 4 API Request DTOs (api/request/)
+- 2 Config classes (OpenApiConfig, AsyncConfig)
+- 3 Custom exceptions (PermissionDeniedException, ProtectedRoleException, DuplicateRoleAssignmentException)
+- 1 Event class (PermissionChangeEvent)
+- ~13 DTOs:
+  - 6 API Response DTOs (api/response/): RoleResponse, UserPermissionsResponse, DelegationResponse, DelegationsResponse, ResourcePermissionResponse, AuditLogResponse
+  - 4 API Request DTOs (api/request/): RoleRequest, UserRoleAssignmentRequest, ResourcePermissionRequest, DelegationRequest
   - 3 Service-layer DTOs (service/dto/): EffectivePermissions, DelegationsSummary, AuditQueryFilter
+
+### Test Files (~10 files)
+
+- TestConstants.java (reusable test data)
+- 9 Test classes per section 9.3
 
 ### service-common Updates
 
@@ -2315,6 +3271,30 @@ Use H2 in-memory database with PostgreSQL mode and TestSecurityConfig from servi
 - [ ] Temporal entities extend `AuditableEntity`
 - [ ] Async configuration properly documented with `@EnableAsync`
 - [ ] Controllers use `@PreAuthorize("hasAuthority(...)")` not `hasRole(...)`
+
+### OpenAPI/SpringDoc Compliance
+- [ ] All request DTOs have `@Schema` annotations with description, example, and requiredMode
+- [ ] All response DTOs have `@Schema` annotations with description and example
+- [ ] All request DTOs have Bean Validation annotations (`@NotBlank`, `@Size`, etc.)
+- [ ] All controller methods have `@Operation` with summary and description
+- [ ] All controller methods have complete `@ApiResponses` with content schemas
+- [ ] All path variables and query params have `@Parameter` annotations with examples
+- [ ] Error responses reference `ApiErrorResponse.class` schema
+
+### Exception Handling
+- [ ] Custom exceptions extend `BusinessException` from service-web
+- [ ] `PermissionDeniedException` used for authorization failures (403)
+- [ ] `ProtectedRoleException` used for SYSTEM_ADMIN protection (403)
+- [ ] `DuplicateRoleAssignmentException` used for duplicate assignments (422)
+- [ ] `ResourceNotFoundException` used for missing entities (404)
+- [ ] All exceptions have meaningful error codes
+
+### Testing Compliance
+- [ ] Test method names use camelCase (no underscores)
+- [ ] `TestConstants` class created with reusable test data
+- [ ] Error response tests only assert on stable contract fields (type, status, title)
+- [ ] JwtTestBuilder used for testing secured endpoints
+- [ ] Tests cover all key scenarios in section 9.4
 
 ### Soft Delete & Audit Trail
 - [ ] User, Role, Permission entities extend SoftDeletableEntity
