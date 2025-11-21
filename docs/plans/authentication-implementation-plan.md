@@ -606,13 +606,13 @@ Machine-to-machine clients bypass Session Gateway and use JWT directly:
 
 ## Phase 6: Testing & Validation (Week 6)
 
-### Task 6.1: Test OAuth Flow
+### Task 6.1: Test OAuth Flow - ✅ COMPLETED
 - Test login flow end-to-end
 - Verify session cookie is set (HttpOnly, Secure)
 - Verify JWT is stored in Redis (not browser)
 - Test logout clears session
 
-### Task 6.2: Test JWT Validation
+### Task 6.2: Test JWT Validation - ✅ COMPLETED
 - Test valid JWT allows API access
 - Test expired JWT returns 401
 - Test missing JWT returns 401

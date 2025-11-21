@@ -22,7 +22,7 @@ This is the implementation plan for the Permission Service - a Spring Boot micro
 
 The complete original implementation plan is preserved as a historical record:
 
-**[permission-service-implementation-plan-ARCHIVE.md](./permission-service-implementation-plan-ARCHIVE.md)** (~3,338 lines)
+**[permission-service-implementation-plan-ARCHIVE.md](./archive/permission-service-implementation-plan-ARCHIVE.md)** (~3,338 lines)
 
 ---
 
