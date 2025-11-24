@@ -570,48 +570,4 @@ cmd_button(
     location=location.RESOURCE
 )
 
-cmd_button(
-    'db-migrate',
-    argv=['./gradlew', 'flywayMigrate'],
-    resource='transaction-service-compile',
-    icon_name='storage',
-    text='Run Migrations',
-    location=location.RESOURCE
-)
-
-# ============================================================================
-# LOCAL RESOURCES FOR DEVELOPMENT TASKS
-# ============================================================================
-
-# Database migration runner
-local_resource(
-    'run-all-migrations',
-    cmd='cd ' + get_repo_path('transaction-service') + ' && ./gradlew flywayMigrate -Pflyway.url=jdbc:postgresql://localhost:5432/budget_analyzer -Pflyway.user=budget_analyzer -Pflyway.password=budget_analyzer && ' +
-        'cd ' + get_repo_path('currency-service') + ' && ./gradlew flywayMigrate -Pflyway.url=jdbc:postgresql://localhost:5432/currency -Pflyway.user=budget_analyzer -Pflyway.password=budget_analyzer && ' +
-        'cd ' + get_repo_path('permission-service') + ' && ./gradlew flywayMigrate -Pflyway.url=jdbc:postgresql://localhost:5432/permission -Pflyway.user=budget_analyzer -Pflyway.password=budget_analyzer',
-    labels=['database'],
-    resource_deps=['postgresql'],
-    trigger_mode=TRIGGER_MODE_MANUAL,
-    auto_init=False
-)
-
-# Reset databases to clean state
-# Deletes PostgreSQL PVC and pod, waits for recreation, then runs all migrations
-local_resource(
-    'reset-databases',
-    cmd='''
-        echo "Deleting PostgreSQL PVC and pod..."
-        kubectl delete pvc postgresql-data-postgresql-0 -n ''' + INFRA_NAMESPACE + ''' --ignore-not-found
-        kubectl delete pod postgresql-0 -n ''' + INFRA_NAMESPACE + ''' --ignore-not-found
-        echo "Waiting for PostgreSQL pod to be ready..."
-        kubectl wait --for=condition=ready pod/postgresql-0 -n ''' + INFRA_NAMESPACE + ''' --timeout=120s
-        echo "PostgreSQL ready. Triggering migrations..."
-        tilt trigger run-all-migrations
-        echo "Database reset complete!"
-    ''',
-    labels=['database'],
-    resource_deps=['postgresql'],
-    trigger_mode=TRIGGER_MODE_MANUAL,
-    auto_init=False
-)
 

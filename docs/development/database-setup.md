@@ -37,33 +37,6 @@ Tilt will:
 2. Create databases via init scripts in `postgres-init/`
 3. Set up port forward to `localhost:5432`
 
-## Running Migrations
-
-Migrations are managed by Flyway in each service. Run them via Tilt UI:
-
-1. Open Tilt UI: http://localhost:10350
-2. Click on `run-all-migrations` resource
-3. Click "Trigger Update" button
-
-Or trigger via command line:
-```bash
-tilt trigger run-all-migrations
-```
-
-## Resetting Databases
-
-To reset all databases to a clean state with fresh migrations:
-
-1. Open Tilt UI: http://localhost:10350
-2. Click on `reset-databases` resource
-3. Click "Trigger Update" button
-
-This will:
-1. Delete the PostgreSQL PVC (`postgresql-data-postgresql-0`)
-2. Delete and recreate the PostgreSQL pod
-3. Wait for PostgreSQL to be ready
-4. Run all migrations automatically
-
 ## Connecting from Your Application
 
 ### From Host Machine (via port forward)
@@ -90,11 +63,7 @@ When adding a new microservice that needs its own database:
    GRANT ALL PRIVILEGES ON DATABASE your_database_name TO budget_analyzer;
    ```
 
-2. Reset the database to apply changes:
-   - In Tilt UI, click `reset-databases` button
-   - **WARNING**: This deletes all existing data
-
-   Or create the database manually (preserves existing data):
+2. Create the database manually:
    ```bash
    kubectl exec -n infrastructure postgresql-0 -- psql -U budget_analyzer -c "CREATE DATABASE your_db;"
    ```
@@ -145,10 +114,7 @@ ps aux | grep "kubectl.*port-forward.*5432"
 
 The initialization scripts only run when the PVC is first created. If you added a new database but it doesn't exist:
 
-**Option 1:** Reset databases (loses all data):
-- Click `reset-databases` in Tilt UI
-
-**Option 2:** Create manually (preserves data):
+Create the database manually:
 ```bash
 kubectl exec -n infrastructure postgresql-0 -- psql -U budget_analyzer -c "CREATE DATABASE your_db;"
 ```

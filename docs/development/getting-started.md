@@ -85,23 +85,17 @@ Browser → Envoy Gateway (443) → Session Gateway (8081) → Envoy Gateway →
          SSL/HTTPS             OAuth2/Session                            JWT Validation    Business Logic
 ```
 
-### 6. Run Database Migrations
-
-In the Tilt UI (http://localhost:10350), click the **"run-all-migrations"** button to apply Flyway migrations for all services.
-
 ## Tilt UI Overview
 
 The Tilt UI at http://localhost:10350 provides:
 
 - **Resource Status**: Real-time status of all services
 - **Logs**: Live logs from all pods
-- **Buttons**: Quick actions like migrations and database reset
+- **Buttons**: Quick actions for development
 
 **Key Resources:**
 - `service-common-publish` - Builds shared library
 - `*-compile` - Compiles each service
-- `run-all-migrations` - Runs database migrations
-- `reset-databases` - Resets databases to clean state with migrations
 
 ## Access Patterns
 

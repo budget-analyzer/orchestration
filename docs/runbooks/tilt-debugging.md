@@ -512,17 +512,6 @@ kubectl delete pod -l app=transaction-service
 tilt trigger transaction-service
 ```
 
-### Reset Database
-
-```bash
-# Run database reset script
-./scripts/dev/reset-databases.sh
-
-# Or manually
-kubectl delete pvc -l app=postgresql -n infrastructure
-kubectl delete pod -l app=postgresql -n infrastructure
-```
-
 ### Clear Redis Sessions
 
 ```bash

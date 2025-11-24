@@ -280,8 +280,6 @@ kubectl exec -n budget-analyzer deployment/nginx-gateway -- nginx -t
 # View Envoy Gateway logs
 kubectl logs -n envoy-gateway-system deployment/envoy-gateway
 
-# Reset databases to clean state (in Tilt UI)
-# Click "reset-databases" button → automatically runs migrations
 ```
 
 **For detailed troubleshooting**: When encountering specific issues (502 errors, CORS problems, connection refused, etc.), consult the comprehensive troubleshooting guide in [nginx/README.md](nginx/README.md)

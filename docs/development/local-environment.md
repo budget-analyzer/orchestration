@@ -142,11 +142,6 @@ Tilt compiles services locally using Gradle, then builds Docker images:
 - `session-gateway-compile` - Compiles session gateway
 - `token-validation-service-compile` - Compiles token validation service
 
-### Database Resources
-
-- `run-all-migrations` - Runs Flyway migrations for all services
-- `reset-databases` - Deletes PostgreSQL PVC, recreates database, runs migrations
-
 ### Infrastructure Resources
 
 - `postgresql` - PostgreSQL StatefulSet
@@ -230,8 +225,6 @@ Password: budget_analyzer
 postgresql://budget_analyzer:budget_analyzer@localhost:5432/budget_analyzer
 ```
 
-**Reset databases to clean state:**
-In Tilt UI, click the `reset-databases` button.
 
 ## Port Reference
 

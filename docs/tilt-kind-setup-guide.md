@@ -261,14 +261,6 @@ curl http://localhost:8081/actuator/health
 # Expected: {"status":"UP",...}
 ```
 
-### Run Database Migrations
-
-Migrations must be triggered manually after infrastructure is up:
-
-```bash
-tilt trigger run-all-migrations
-```
-
 ### Access the Application
 
 After all services are healthy:
