@@ -113,6 +113,12 @@ Reference: [deployment-architecture-gcp-demo-mode.md](../architecture/deployment
 
 - [ ] Submit to [awesome-microservices](https://github.com/mfornos/awesome-microservices)
 - [ ] Consider blog post about AI-assisted development journey
+- [ ] Highlight **AI-first containerized development architecture** as key differentiator:
+  - Only effective way to run AI agents: autonomous execution with `--dangerously-skip-permissions`
+  - VS Code devcontainer sandbox enables safe sudo access for AI agents
+  - Docker wormhole pattern (PR #3) allows TestContainers integration tests
+  - Test-driven AI pattern: define success criteria → run autonomously → verify
+  - See [autonomous-ai-execution.md](../architecture/autonomous-ai-execution.md)
 - [ ] Add project to relevant Spring Boot/Kubernetes showcases
 - [ ] Share on relevant subreddits (r/java, r/kubernetes, r/microservices)
 

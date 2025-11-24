@@ -248,6 +248,18 @@ Each microservice is maintained in its own repository:
 3. Do NOT attempt to hack around missing prerequisites - this leads to broken implementations that must be deleted
 4. Complete prerequisites first, then return to the original task
 
+### Autonomous AI Execution Pattern
+
+**Key principle**: The only effective way to run AI agents is autonomously. Set clear success criteria, then run with `--dangerously-skip-permissions`.
+
+**For detailed understanding of**:
+- Why autonomous execution is essential for AI agents
+- How the container sandbox makes this safe
+- Docker access patterns (wormhole for TestContainers, true DinD for CI)
+- Success criteria patterns and best practices
+
+→ See [docs/architecture/autonomous-ai-execution.md](docs/architecture/autonomous-ai-execution.md)
+
 ### SSL/TLS Certificate Constraints
 
 **NEVER run SSL write operations** - Claude runs in a container with its own mkcert CA, but the user's browser trusts their host's mkcert CA. These are different CAs, so certificates generated in Claude's sandbox will cause browser SSL warnings.
