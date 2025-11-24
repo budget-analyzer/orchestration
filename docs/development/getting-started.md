@@ -40,7 +40,7 @@ The setup script will:
 Edit `.env` with your credentials:
 
 ```bash
-vim .env
+vi .env
 ```
 
 **Required:**

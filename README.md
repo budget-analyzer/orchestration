@@ -42,8 +42,11 @@ See [docs/setup/fred-api-setup.md](docs/setup/fred-api-setup.md) for details.
 ### 4. Configure & Run
 
 ```bash
+# Copy the example environment file
+cp .env.example .env
+
 # Edit .env with your Auth0 and FRED credentials
-vim .env
+vi .env
 
 # Start all services
 tilt up
@@ -53,6 +56,7 @@ Open https://app.budgetanalyzer.localhost
 
 ## Documentation
 
+- [Getting Started](docs/development/getting-started.md)
 - [Architecture Overview](docs/architecture/overview.md)
 - [Development Guide](CLAUDE.md)
 - [Troubleshooting](docs/development/troubleshooting.md)
