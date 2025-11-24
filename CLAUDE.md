@@ -65,136 +65,46 @@ kubectl get svc -n budget-analyzer
 - **Ingress**: Envoy Gateway (port 443, HTTPS) - SSL termination and initial routing
 - **API Gateway**: NGINX (port 8080, HTTP) - internal routing, JWT validation, and load balancing
 
-**Adding New Services**:
-1. Create Kubernetes manifests in `kubernetes/services/{service-name}/`
-2. Add service to `Tiltfile` using `spring_boot_service()` pattern
-3. Add routes to `nginx/nginx.k8s.conf` if frontend-facing
-4. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
+**Adding New Services**: Create K8s manifests in `kubernetes/services/{name}/`, add to `Tiltfile`, add NGINX routes if needed. See [docs/architecture/bff-api-gateway-pattern.md](docs/architecture/bff-api-gateway-pattern.md) for details.
 
 ## BFF + API Gateway Hybrid Pattern
 
 **Pattern**: Hybrid architecture combining Backend-for-Frontend (BFF) for browser security with API Gateway for routing and validation.
 
-### Request Flow
-
-**All browser traffic goes through Session Gateway.** Think of it as a maxiservice.
-
+**Request Flow**:
 ```
 Browser → Envoy (:443) → Session Gateway (:8081) → Envoy → NGINX (:8080) → Services
 ```
 
-- **Envoy**: SSL termination for all traffic
-- **Session Gateway**: JWT lookup from Redis, inject into header
-- **NGINX**: JWT validation, route to service
+**Two entry points**:
+- `app.budgetanalyzer.localhost` → Session Gateway (browser auth, session cookies)
+- `api.budgetanalyzer.localhost` → NGINX (JWT validation, routing)
 
-**Two entry points:**
-- `app.budgetanalyzer.localhost` → Envoy → Session Gateway (browser auth)
-- `api.budgetanalyzer.localhost` → Envoy → NGINX (API gateway)
+**Key Benefits**:
+- Same-origin architecture = no CORS issues
+- JWTs never exposed to browser (XSS protection for financial data)
+- Centralized JWT validation and routing
 
-### Component Roles
-
-**Envoy Gateway (Port 443, HTTPS) - Ingress Layer**:
-- **Purpose**: SSL termination and initial routing
-- **Responsibilities**:
-  - Handles SSL/TLS termination for both app. and api. subdomains
-  - Routes app.budgetanalyzer.localhost to Session Gateway
-  - Routes api.budgetanalyzer.localhost to NGINX
-  - Provides Gateway API-compliant ingress
-- **Key Benefit**: Modern, Kubernetes-native ingress with SSL termination
-
-**NGINX (Port 8080, HTTP) - API Gateway Layer**:
-- **Purpose**: JWT validation, routing, and request processing
-- **Responsibilities**:
-  - Validates JWTs via Token Validation Service (auth_request directive)
-  - Routes requests to appropriate microservices
-  - Resource-based routing with path transformation
-  - Rate limiting per user/IP
-  - Load balancing and circuit breaking
-- **Key Benefit**: Centralized JWT validation and routing logic
-
-**Session Gateway (Port 8081, HTTP) - BFF Layer**:
-- **Purpose**: Browser authentication and session security
-- **Responsibilities**:
-  - Manages OAuth2 flows with Auth0
-  - Stores JWTs in Redis (server-side, never exposed to browser)
-  - Issues HttpOnly, Secure session cookies to browsers
-  - Proactive token refresh before expiration
-  - Proxies authenticated requests to NGINX with JWT injection
-- **Key Benefit**: Maximum security for browser-based financial application (JWTs never exposed to XSS)
-
-**Token Validation Service (Port 8088)**:
-- **Purpose**: JWT signature verification for NGINX
-- **Responsibilities**:
-  - Verifies JWT signatures using Auth0 JWKS
-  - Validates issuer, audience, and expiration claims
-  - Called by NGINX via auth_request for every protected endpoint
-- **Key Benefit**: Centralized JWT validation logic, defense in depth
-
-### No CORS Needed
-
-**Same-Origin Architecture**: All browser requests go through Session Gateway (app.budgetanalyzer.localhost), which proxies to NGINX, which routes to backends. Browser sees single origin = no CORS issues!
-
-**Traditional architecture (CORS required)**:
-```
-Browser → Frontend (3000) → Backend Services (8082+)  ❌ Different origins
-```
-
-**Current architecture (No CORS)**:
-```
-Browser → Session Gateway (app.budgetanalyzer.localhost) → NGINX (api.budgetanalyzer.localhost) → Backend Services  ✅ Same origin
-```
-
-### Resource-Based Routing
-
-**Pattern**: Frontend calls clean paths like `/api/transactions`, NGINX routes to appropriate microservice with path transformation.
-
-**Quick Reference**:
-- All routes defined in [nginx/nginx.k8s.conf](nginx/nginx.k8s.conf)
-- Routing pattern: `location /api/{resource}` → `rewrite ^/api/(.*)$` → `proxy_pass http://{upstream}`
-- JWT validation via `auth_request /auth/validate` on all protected routes
-- Services accessed via Kubernetes DNS names
-- Benefits: Frontend decoupled from service topology, services can be split/merged without frontend changes
-
-**Discovery** (inspect routes without reading full config):
+**Discovery**:
 ```bash
 # List all API routes
 grep "location /api" nginx/nginx.k8s.conf | grep -v "#"
 
-# Test Session Gateway health
+# Test gateways
 curl -v https://app.budgetanalyzer.localhost/actuator/health
-
-# Test API Gateway
 curl -v https://api.budgetanalyzer.localhost/health
+
+# View service ports
+kubectl get svc -n budget-analyzer
 ```
 
-**When to consult detailed nginx documentation**:
-- Adding new API routes → Read "Adding a New Resource Route" in [nginx/README.md](nginx/README.md)
-- Adding new microservices → Read "Adding a New Microservice" in [nginx/README.md](nginx/README.md)
-- Moving resources between services → Read "Moving a Resource Between Services" in [nginx/README.md](nginx/README.md)
-- Troubleshooting gateway issues → Read "Troubleshooting" section in [nginx/README.md](nginx/README.md)
-
-### Port Summary
-
-| Port | Service | Purpose | Access |
-|------|---------|---------|--------|
-| 443 | Envoy Gateway | SSL termination, ingress (HTTPS) | Public (browsers via app. and api.budgetanalyzer.localhost) |
-| 8080 | NGINX Gateway | JWT validation, routing | Internal (Envoy only) |
-| 8081 | Session Gateway | Browser authentication, session management | Internal (Envoy only) |
-| 8088 | Token Validation | JWT signature verification | Internal (NGINX only) |
-| 8082 | Transaction Service | Business logic | Internal (NGINX only) |
-| 8084 | Currency Service | Business logic | Internal (NGINX only) |
-| 3000 | React Dev Server | Frontend (dev only) | Internal (NGINX only) |
-
-### Security Benefits
-
-**Defense in Depth**:
-1. **Envoy Gateway**: SSL termination for all traffic
-2. **Session Gateway**: Prevents JWT exposure to browser (XSS protection)
-3. **NGINX auth_request**: Validates every API request before routing
-4. **Token Validation Service**: Cryptographic JWT verification
-5. **Backend Services**: Data-level authorization (user owns resource)
-
-**For detailed security architecture**: See [docs/architecture/security-architecture.md](docs/architecture/security-architecture.md)
+**When to consult detailed documentation**:
+- Understanding component roles and request flow → [docs/architecture/bff-api-gateway-pattern.md](docs/architecture/bff-api-gateway-pattern.md)
+- Port reference and service topology → [docs/architecture/port-reference.md](docs/architecture/port-reference.md)
+- Adding new API routes → "Adding a New Resource Route" in [nginx/README.md](nginx/README.md)
+- Adding new microservices → "Adding a New Microservice" in [nginx/README.md](nginx/README.md)
+- Troubleshooting gateway issues → "Troubleshooting" in [nginx/README.md](nginx/README.md)
+- Security architecture details → [docs/architecture/security-architecture.md](docs/architecture/security-architecture.md)
 
 ## Technology Stack
 
@@ -222,62 +132,24 @@ kubectl get pods -n budget-analyzer -o jsonpath='{.items[*].spec.containers[*].i
 
 ## Development Workflow
 
-### Prerequisites
+### Prerequisites & Setup
 
-**See [Development Environment Requirements](#development-environment-requirements) for AI-assisted development setup.**
+**Required tools**: Docker, Kind, kubectl, Helm, Tilt, Git, mkcert
 
-**Host machine tools** (required for running Kubernetes development environment):
-- Docker (for building images and running Kind)
-- Kind (local Kubernetes cluster)
-- kubectl (Kubernetes CLI)
-- Helm (for installing Envoy Gateway)
-- Tilt (development workflow orchestration)
-- Git
-- mkcert (for local HTTPS certificates)
-
-**Optional for local service development** (not required if using Tilt):
-- JDK 17+ (for local Spring Boot development)
-- Node.js 18+ (for local React development)
-
-Check prerequisites with:
+Check prerequisites:
 ```bash
 ./scripts/dev/check-tilt-prerequisites.sh
 ```
 
-### First Time Setup
-
-**HTTPS Certificate Setup**:
-The application uses HTTPS for local development with clean subdomain URLs:
-- Browser entry point: `https://app.budgetanalyzer.localhost` (Envoy → Session Gateway)
-- API Gateway: `https://api.budgetanalyzer.localhost` (Envoy → NGINX → Backend Services)
-
-Run the setup script to generate trusted local certificates:
+**First-time setup**:
 ```bash
-# Install mkcert (first time only)
-# macOS:   brew install mkcert nss
-# Linux:   See https://github.com/FiloSottile/mkcert#installation
-# Windows: choco install mkcert
-
-# Generate certificates and create Kubernetes TLS secret
+# 1. Generate HTTPS certificates (see SSL/TLS section below for details)
 ./scripts/dev/setup-k8s-tls.sh
-```
 
-This script will:
-1. Install a local Certificate Authority (CA) in your system's trust store
-2. Generate a wildcard certificate for `*.budgetanalyzer.localhost`
-3. Create Kubernetes TLS secret for Envoy Gateway
-4. Your browser will automatically trust these certificates (no warnings!)
-
-**Environment Variables Setup**:
-Configure Auth0 credentials for authentication:
-```bash
-# Copy the example file
+# 2. Configure Auth0 credentials
 cp .env.example .env
-
-# Edit .env with your Auth0 credentials from https://manage.auth0.com/dashboard
+# Edit .env with your Auth0 credentials
 ```
-
-The `.env` file is gitignored and loaded by Tilt via the dotenv extension. No shell exports needed!
 
 ### Quick Start
 ```bash
