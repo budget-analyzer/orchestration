@@ -1,40 +1,79 @@
 # Budget Analyzer - System Overview
 
-**Date:** 2025-11-10
+**Date:** 2025-11-24
 **Status:** Active
 
+## Request Flow
+
+**Browser traffic always goes through Session Gateway.** Think of it as a maxiservice - the browser connects to one thing.
+
+```
+BROWSER REQUEST FLOW
+====================
+
+Browser (https://app.budgetanalyzer.localhost)
+    │
+    ▼ HTTPS
+Envoy Gateway (:443) ─── SSL termination
+    │
+    ▼ HTTP
+Session Gateway (:8081) ─── JWT lookup from Redis, inject into header
+    │
+    ▼ HTTPS
+Envoy Gateway (:443) ─── routes to api.budgetanalyzer.localhost
+    │
+    ▼ HTTP
+NGINX Gateway (:8080) ─── JWT validation, route to service
+    │
+    ▼ HTTP
+Backend Services ─── business logic, data authorization
+```
+
+**Two entry points, same pattern:**
+- `app.budgetanalyzer.localhost` → Envoy → Session Gateway (browser auth, stores JWT in Redis)
+- `api.budgetanalyzer.localhost` → Envoy → NGINX (API gateway, validates JWT)
+
+**Why this works:**
+- Browser never sees JWT (XSS protection)
+- Single origin = no CORS
+- Envoy handles all SSL
+- NGINX validates every request
+
 ## Architecture Overview
-
-Budget Analyzer is a microservices-based financial management system with a React frontend, Spring Boot backend services, and NGINX API gateway.
-
-### High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Budget Analyzer Web                     │
 │                    (React 19 + TypeScript)                   │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ HTTP/REST
+                            │ HTTPS
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     NGINX API Gateway                        │
-│              (Resource-based routing: /api/*)                │
+│                      Envoy Gateway (:443)                    │
+│              (SSL termination, ingress routing)              │
 └─────────┬──────────────────────────┬────────────────────────┘
-          │                          │
+          │ app.*                    │ api.*
           ▼                          ▼
-┌──────────────────────┐   ┌──────────────────────┐
-│  Transaction Service │   │   Currency Service   │
-│   (Spring Boot)      │   │   (Spring Boot)      │
-│   Port: 8082         │   │   Port: 8084         │
-└──────────┬───────────┘   └─────────┬────────────┘
-           │                         │
-           ▼                         ▼
-┌─────────────────────────────────────────────────┐
-│              Shared Infrastructure              │
-│  • PostgreSQL (primary database)                │
-│  • Redis (distributed caching)                  │
-│  • RabbitMQ (async messaging)                   │
-└─────────────────────────────────────────────────┘
+┌──────────────────────┐   ┌──────────────────────────────────┐
+│   Session Gateway    │   │         NGINX API Gateway         │
+│   (BFF, OAuth2)      │──▶│   (JWT validation, routing)       │
+│   :8081              │   │   :8080                           │
+└──────────────────────┘   └─────────┬────────────────────────┘
+                                     │
+              ┌──────────────────────┼──────────────────────┐
+              ▼                      ▼                      ▼
+┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
+│  Transaction Service │ │   Currency Service   │ │  Permission Service  │
+│   :8082              │ │   :8084              │ │   :8086              │
+└──────────┬───────────┘ └─────────┬────────────┘ └──────────┬───────────┘
+           │                       │                         │
+           ▼                       ▼                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Shared Infrastructure                           │
+│  • PostgreSQL (primary database)                             │
+│  • Redis (session storage, caching)                          │
+│  • RabbitMQ (async messaging)                                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Services
@@ -46,6 +85,27 @@ Budget Analyzer is a microservices-based financial management system with a Reac
 - Features: Transaction management, CSV import, search, analytics
 - Development port: 3000
 - Production: Static assets served via NGINX
+
+### Gateway Services
+
+**Envoy Gateway** (Port 443)
+- SSL/TLS termination
+- Ingress routing based on hostname
+- Kubernetes Gateway API compliant
+
+**Session Gateway (BFF)** (Port 8081)
+- OAuth2 authentication with Auth0
+- Session management via Redis
+- JWT storage (never exposed to browser)
+
+**NGINX API Gateway** (Port 8080)
+- JWT validation via Token Validation Service
+- Resource-based routing
+- Load balancing
+
+**Token Validation Service** (Port 8088)
+- JWT signature verification
+- JWKS integration with Auth0
 
 ### Backend Microservices
 
@@ -60,21 +120,21 @@ Budget Analyzer is a microservices-based financial management system with a Reac
 - Database: PostgreSQL (currencies, exchange rates)
 - External: Federal Reserve Economic Data (FRED)
 
-### Infrastructure Services
+**permission-service** (Port 8086)
+- Domain: User permissions and authorization
+- Key features: Role-based access control
+- Database: PostgreSQL (permissions, roles)
 
-**NGINX API Gateway** (Port 443, HTTPS)
-- Unified entry point for all API calls
-- SSL/TLS termination
-- Resource-based routing (see [002-resource-based-routing.md](../decisions/002-resource-based-routing.md))
+### Infrastructure Services
 
 **PostgreSQL**
 - Primary database for all services
-- Service-specific schemas
+- Service-specific databases
 - Managed via Flyway migrations per service
 
 **Redis**
+- Session storage (Session Gateway)
 - Distributed caching (currency-service)
-- Session storage (future)
 
 **RabbitMQ**
 - Async messaging between services
@@ -123,10 +183,10 @@ Services communicate asynchronously where possible:
 cat budget-analyzer-web/package.json | grep '"react"'
 
 # Spring Boot version (canonical source)
-cat service-common/pom.xml | grep '<spring-boot.version>'
+cat service-common/build.gradle.kts | grep 'springBootVersion'
 
-# Infrastructure versions
-docker compose config | grep 'image:' | sort -u
+# List all Tilt resources
+tilt get uiresources
 ```
 
 ### Core Technologies
@@ -139,21 +199,23 @@ docker compose config | grep 'image:' | sort -u
 
 **Backend:**
 - Spring Boot 3.x
-- Java 21
+- Java 24
 - Pure JPA (Jakarta Persistence API)
 - Spring Modulith (modularity + events)
 
 **Infrastructure:**
-- Docker & Docker Compose
+- Kubernetes (Kind for local dev)
+- Tilt (development orchestration)
 - PostgreSQL 16+
 - Redis 7+
 - RabbitMQ 3.x
-- NGINX (Alpine-based)
+- Envoy Gateway (ingress)
+- NGINX (API gateway)
 
 ## Service Communication Patterns
 
 ### Synchronous (REST)
-- Frontend → Gateway → Services
+- Frontend → Envoy → Session Gateway → NGINX → Services
 - Used for: User-initiated actions, queries
 
 ### Asynchronous (Events)
@@ -168,13 +230,14 @@ docker compose config | grep 'image:' | sort -u
 ## Data Management
 
 ### Database Strategy
-- **Per-service schemas**: Each service owns its schema
+- **Per-service databases**: Each service owns its database
 - **No shared tables**: Services never share database tables
 - **Flyway migrations**: Version-controlled schema evolution
-- **PostgreSQL**: Single instance, multiple schemas (local dev)
+- **PostgreSQL**: Single instance, multiple databases (local dev)
 
 ### Caching Strategy
 - **Redis distributed cache**: Used by currency-service
+- **Session storage**: Used by session-gateway
 - **TTL-based expiration**: Configurable per cache
 - **Cache-aside pattern**: Services manage cache population
 
@@ -186,9 +249,10 @@ docker compose config | grep 'image:' | sort -u
 ## Deployment Architecture
 
 ### Local Development
-- Docker Compose orchestration
-- Hot reload for all services
-- HTTPS: https://app.budgetanalyzer.localhost (gateway 443), 8082+ (services internal)
+- Tilt + Kind orchestration
+- Live reload for all services
+- HTTPS: https://app.budgetanalyzer.localhost (Envoy Gateway 443)
+- Port forwards for direct service access
 
 ### Production (Future)
 - Kubernetes deployment
@@ -199,17 +263,17 @@ docker compose config | grep 'image:' | sort -u
 ## Discovery Commands
 
 ```bash
-# List all services
-docker compose config --services
+# List all Tilt resources
+tilt get uiresources
 
-# View service configurations
-docker compose config
+# View pod status
+kubectl get pods -n budget-analyzer
 
-# Check running services
-docker compose ps
+# View service endpoints
+kubectl get svc -n budget-analyzer
 
 # View API routes
-grep "location /api" nginx/nginx.dev.conf | grep -v "#"
+grep "location /api" nginx/nginx.k8s.conf | grep -v "#"
 ```
 
 ## References

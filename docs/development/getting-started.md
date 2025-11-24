@@ -2,8 +2,17 @@
 
 ## Prerequisites
 
-- Docker and Docker Compose ([installation guide](https://docs.docker.com/get-docker/))
+- Docker ([installation guide](https://docs.docker.com/get-docker/))
+- Kind (local Kubernetes cluster)
+- kubectl (Kubernetes CLI)
+- Helm (for installing Envoy Gateway)
+- Tilt (development workflow orchestration)
 - Git
+
+Check prerequisites with:
+```bash
+./scripts/dev/check-tilt-prerequisites.sh
+```
 
 ## Quick Start
 
@@ -12,7 +21,8 @@
 Clone all repositories side-by-side:
 
 ```bash
-cd /workspace
+mkdir -p ~/workspace/budget-analyzer
+cd ~/workspace/budget-analyzer
 git clone https://github.com/budgetanalyzer/orchestration.git
 git clone https://github.com/budgetanalyzer/service-common.git
 git clone https://github.com/budgetanalyzer/transaction-service.git
@@ -23,107 +33,75 @@ git clone https://github.com/budgetanalyzer/token-validation-service.git
 git clone https://github.com/budgetanalyzer/permission-service.git
 ```
 
-### 2. Start Infrastructure
+### 2. Set Up Local HTTPS
 
-From the orchestration directory:
-
-```bash
-cd orchestration
-docker compose up -d
-```
-
-This starts:
-- PostgreSQL (shared database for all services)
-- NGINX gateway (API gateway, JWT validation, and reverse proxy)
-- Redis (session storage for Session Gateway)
-- RabbitMQ (message broker)
-
-### 3. Publish service-common to Maven Local
-
-The backend services depend on the shared `service-common` library. You must publish it to your local Maven repository before running any backend services:
+Run the setup script to generate trusted local certificates (on your host machine, not in containers):
 
 ```bash
-cd /workspace/service-common
-./gradlew publishToMavenLocal
+cd orchestration/
+
+# Install mkcert first (if not installed)
+# macOS:   brew install mkcert nss
+# Linux:   See https://github.com/FiloSottile/mkcert#installation
+# Windows: choco install mkcert
+
+# Generate certificates and create Kubernetes TLS secret
+./scripts/dev/setup-k8s-tls.sh
 ```
 
-This makes the shared library available to all services that depend on it (transaction-service, currency-service, etc.).
-
-**Note**: Re-run this command whenever you make changes to service-common.
-
-### 4. Verify Setup
-
-Check all services are running:
+### 3. Configure Environment Variables
 
 ```bash
-docker compose ps
+# Copy the example file
+cp .env.example .env
+
+# Edit .env with your Auth0 credentials from https://manage.auth0.com/dashboard
 ```
 
-Access the application:
+### 4. Start All Services
+
+```bash
+cd orchestration/
+tilt up
+```
+
+This will:
+- Build all service images
+- Deploy to local Kind cluster
+- Set up Envoy Gateway for SSL termination
+- Configure NGINX for JWT validation and routing
+- Start PostgreSQL, Redis, RabbitMQ
+
+### 5. Access the Application
+
+- **Tilt UI**: http://localhost:10350 (logs, status, buttons)
 - **Application**: https://app.budgetanalyzer.localhost
-- **Unified API Documentation**: https://api.budgetanalyzer.localhost/api/docs
+- **API Documentation**: https://api.budgetanalyzer.localhost/api/docs
 - **OpenAPI JSON**: https://api.budgetanalyzer.localhost/api/docs/openapi.json
-- **OpenAPI YAML**: https://api.budgetanalyzer.localhost/api/docs/openapi.yaml
 
-> **Note**: This local development setup uses HTTPS with mkcert-generated certificates. The current architecture is dev-specific and will likely be replaced by k3s or similar in the future.
-
-**Important**: All browser requests go through NGINX to Session Gateway: `https://app.budgetanalyzer.localhost`
-- NGINX (443) handles SSL termination and proxies to Session Gateway (8081)
-- Session Gateway handles authentication and proxies to NGINX API (api.budgetanalyzer.localhost)
-- NGINX validates JWTs and routes to backend services
-
-### 5. Start Session Gateway and Token Validation Service
-
-**Token Validation Service** (JWT validation for NGINX):
-```bash
-cd /workspace/token-validation-service
-# Configure Auth0 (optional for local dev - placeholder values work)
-# AUTH0_ISSUER_URI=https://your-tenant.auth0.com/
-./gradlew bootRun
+**Architecture Flow:**
+```
+Browser → Envoy Gateway (443) → Session Gateway (8081) → Envoy Gateway → NGINX (8080) → Backend Services
+         SSL/HTTPS             OAuth2/Session                            JWT Validation    Business Logic
 ```
 
-**Session Gateway** (BFF - Browser authentication):
-```bash
-cd /workspace/session-gateway
-# Configure Auth0 credentials (required for OAuth login)
-# AUTH0_CLIENT_ID=your-client-id
-# AUTH0_CLIENT_SECRET=your-client-secret
-# AUTH0_ISSUER_URI=https://your-tenant.auth0.com/
-./gradlew bootRun
-```
+## Tilt UI Overview
 
-**Note**: See [docs/architecture/authentication-implementation-plan.md](../architecture/authentication-implementation-plan.md) for Auth0 setup details.
+The Tilt UI at http://localhost:10350 provides:
 
-### 6. Start Backend Services
+- **Resource Status**: Real-time status of all services
+- **Logs**: Live logs from all pods
+- **Buttons**: Quick actions for development
 
-Each backend service can run locally or in Docker. For local development:
-
-**Transaction Service:**
-```bash
-cd /workspace/transaction-service
-./gradlew bootRun
-```
-
-**Currency Service:**
-```bash
-cd /workspace/currency-service
-./gradlew bootRun
-```
-
-**Frontend:**
-```bash
-cd /workspace/budget-analyzer-web
-npm install
-npm run dev
-```
-
-The frontend development server runs on port 3000 but is served through NGINX (443) → Session Gateway (8081) → NGINX API → Vite (3000).
+**Key Resources:**
+- `service-common-publish` - Builds shared library
+- `*-compile` - Compiles each service
 
 ## Access Patterns
 
-### Browser Access (via NGINX/Session Gateway)
+### Browser Access (via Envoy/Session Gateway)
 
-All browser requests go through **NGINX** at `https://app.budgetanalyzer.localhost`:
+All browser requests go through **Envoy Gateway** at `https://app.budgetanalyzer.localhost`:
 
 **Frontend:**
 - Application: `https://app.budgetanalyzer.localhost/`
@@ -134,12 +112,6 @@ All browser requests go through **NGINX** at `https://app.budgetanalyzer.localho
 - Transactions: `https://app.budgetanalyzer.localhost/api/v1/transactions`
 - Currencies: `https://app.budgetanalyzer.localhost/api/v1/currencies`
 - Exchange Rates: `https://app.budgetanalyzer.localhost/api/v1/exchange-rates`
-
-**Architecture Flow:**
-```
-Browser → NGINX (443) → Session Gateway (8081) → NGINX API (443) → Backend Services (8082+)
-         SSL/HTTPS      OAuth2/Session           JWT Validation      Business Logic
-```
 
 ### Internal/Development Access
 
@@ -152,6 +124,46 @@ Browser → NGINX (443) → Session Gateway (8081) → NGINX API (443) → Backe
 
 **Note**: Direct service access bypasses authentication - only for local development debugging.
 
+## Troubleshooting
+
+### Check Pod Status
+
+```bash
+# View all pods
+kubectl get pods -n budget-analyzer
+
+# View infrastructure pods
+kubectl get pods -n infrastructure
+```
+
+### View Logs
+
+```bash
+# Via Tilt UI (recommended)
+# http://localhost:10350 → Click on resource
+
+# Via kubectl
+kubectl logs -n budget-analyzer deployment/transaction-service
+kubectl logs -n budget-analyzer deployment/nginx-gateway
+kubectl logs -n envoy-gateway-system deployment/envoy-gateway
+```
+
+### Common Issues
+
+**Service not starting:**
+- Check Tilt UI for error messages
+- Verify `service-common-publish` completed successfully
+- Check compile step completed
+
+**502 Bad Gateway:**
+- Check if target service pod is running
+- View NGINX logs for routing errors
+- Verify Kubernetes service exists
+
+**SSL Certificate Errors:**
+- Re-run `./scripts/dev/setup-k8s-tls.sh` on host
+- Restart browser
+
 ## Next Steps
 
 - **Database Configuration**: See [database-setup.md](database-setup.md)
@@ -161,12 +173,9 @@ Browser → NGINX (443) → Session Gateway (8081) → NGINX API (443) → Backe
 ## Stopping Services
 
 ```bash
-# Stop infrastructure
-cd orchestration
-docker compose down
+# Stop all services
+tilt down
 
-# Stop backend services (Ctrl+C if running in foreground)
-
-# Remove all data (WARNING: deletes databases)
-docker compose down -v
+# Delete Kind cluster completely (removes all data)
+kind delete cluster
 ```

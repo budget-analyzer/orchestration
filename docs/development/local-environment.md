@@ -9,7 +9,10 @@
 
 **Minimum versions:**
 - Docker 24.0+
-- Docker Compose 2.20+
+- Kind 0.20+
+- kubectl 1.28+
+- Helm 3.12+
+- Tilt 0.33+
 - Git 2.40+
 
 **For Backend Development (Optional):**
@@ -23,19 +26,16 @@
 ### Verify Prerequisites
 
 ```bash
-# Docker
+# Run the check script
+./scripts/dev/check-tilt-prerequisites.sh
+
+# Or check manually:
 docker --version
-docker compose version
-
-# Git
+kind --version
+kubectl version --client
+helm version
+tilt version
 git --version
-
-# Optional: Java
-java -version
-
-# Optional: Node.js
-node --version
-npm --version
 ```
 
 ## Quick Start
@@ -55,6 +55,9 @@ git clone https://github.com/budgetanalyzer/service-common.git
 git clone https://github.com/budgetanalyzer/transaction-service.git
 git clone https://github.com/budgetanalyzer/currency-service.git
 git clone https://github.com/budgetanalyzer/budget-analyzer-web.git
+git clone https://github.com/budgetanalyzer/session-gateway.git
+git clone https://github.com/budgetanalyzer/token-validation-service.git
+git clone https://github.com/budgetanalyzer/permission-service.git
 ```
 
 **Repository structure:**
@@ -64,230 +67,146 @@ git clone https://github.com/budgetanalyzer/budget-analyzer-web.git
 ├── service-common/          # Shared Spring Boot library
 ├── transaction-service/     # Transaction microservice
 ├── currency-service/        # Currency microservice
+├── permission-service/      # Permission microservice
+├── session-gateway/         # BFF for authentication
+├── token-validation-service/ # JWT validation
 └── budget-analyzer-web/     # React frontend
 ```
 
-**Important:** This side-by-side layout is **required** for cross-repository documentation links to work correctly. Claude Code uses relative paths (e.g., `../service-common/CLAUDE.md`) to navigate between repositories, which only works when repositories are cloned adjacent to each other.
+**Important:** This side-by-side layout is **required** for cross-repository documentation links to work correctly.
 
 ### 2. Set Up Local HTTPS
 
-The application uses HTTPS for local development with clean subdomain URLs. Run the setup script to generate trusted local certificates:
+The application uses HTTPS for local development with clean subdomain URLs. Run the setup script on your **host machine** (not in containers):
 
 ```bash
 cd orchestration/
 
 # Install mkcert first (if not installed)
 # macOS:   brew install mkcert nss
-# Linux:   sudo apt install libnss3-tools && curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" && chmod +x mkcert-* && sudo mv mkcert-* /usr/local/bin/mkcert
+# Linux:   sudo apt install libnss3-tools && see mkcert docs
 # Windows: choco install mkcert
 
 # Run the setup script
-./scripts/dev/setup-local-https.sh
+./scripts/dev/setup-k8s-tls.sh
 ```
 
 **What this script does:**
-1. Installs a local CA in your system's trust store (browsers will trust it)
-2. Generates wildcard certificate for `*.budgetanalyzer.localhost`
-3. Adds the CA to your JVM truststore (required for Session Gateway)
-4. Cleans up any orphaned certificate files
+1. Creates a Kind cluster if it doesn't exist
+2. Installs a local CA in your system's trust store
+3. Generates wildcard certificate for `*.budgetanalyzer.localhost`
+4. Creates Kubernetes TLS secret for Envoy Gateway
 
 **Important:** Restart your browser after running this script.
 
-**Troubleshooting SSL issues:**
-- If you get SSL handshake errors, ensure you restart Session Gateway after running the script
-- The script is idempotent - safe to run multiple times
-- Run with `bash -x ./scripts/dev/setup-local-https.sh` for debug output
+### 3. Configure Environment Variables
 
-### 3. Start All Services
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit .env with your Auth0 credentials
+```
+
+### 4. Start All Services
 
 ```bash
 cd orchestration/
-
-# Start everything (infrastructure + services)
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop everything
-docker compose down
+tilt up
 ```
 
-### 3. Verify Services
+### 5. Verify Services
 
 ```bash
-# Check all services running
-docker compose ps
+# Check all pods are running
+kubectl get pods -n budget-analyzer
+kubectl get pods -n infrastructure
 
 # Test gateway
 curl https://api.budgetanalyzer.localhost/health
-
-# Test backend services
-curl http://localhost:8082/actuator/health  # transaction-service
-curl http://localhost:8084/actuator/health  # currency-service
 
 # Open frontend
 open https://app.budgetanalyzer.localhost
 ```
 
-## Service-by-Service Setup
+## Tilt Resources
 
-### Shared Library (service-common)
+### Compile Resources
 
-**Before running any backend services**, you must publish the shared `service-common` library to your local Maven repository:
+Tilt compiles services locally using Gradle, then builds Docker images:
 
-```bash
-cd service-common/
-./gradlew publishToMavenLocal
-```
+- `service-common-publish` - Publishes shared library to Maven Local
+- `transaction-service-compile` - Compiles transaction service
+- `currency-service-compile` - Compiles currency service
+- `permission-service-compile` - Compiles permission service
+- `session-gateway-compile` - Compiles session gateway
+- `token-validation-service-compile` - Compiles token validation service
 
-This makes the shared library available to all backend services (transaction-service, currency-service, etc.).
+### Infrastructure Resources
 
-**When to republish:**
-- After cloning service-common for the first time
-- After pulling updates to service-common
-- After making local changes to service-common
-
-**Troubleshooting:**
-If backend services fail to start with dependency errors like `Could not find com.budgetanalyzer:service-common:X.X.X`, republish service-common to Maven Local.
-
-### Infrastructure Only
-
-Start just infrastructure (PostgreSQL, Redis, RabbitMQ, NGINX):
-
-```bash
-docker compose up -d postgres redis rabbitmq api-gateway
-```
-
-### Backend Services (Spring Boot)
-
-**Option 1: Run in Docker**
-```bash
-docker compose up -d transaction-service currency-service
-```
-
-**Option 2: Run locally (for development)**
-```bash
-# Terminal 1: transaction-service
-cd transaction-service/
-./gradlew bootRun
-
-# Terminal 2: currency-service
-cd currency-service/
-./gradlew bootRun
-```
-
-**Benefits of local execution:**
-- Faster iteration (hot reload)
-- Easier debugging
-- IDE integration
-
-**Drawbacks:**
-- Must manage Java dependencies locally
-- Environment configuration required
-
-### Frontend (React)
-
-**Option 1: Run in Docker**
-```bash
-docker compose up -d budget-analyzer-web
-```
-
-**Option 2: Run locally (for development)**
-```bash
-cd budget-analyzer-web/
-npm install
-npm start
-```
-
-**Frontend will be available at:** https://app.budgetanalyzer.localhost (served through NGINX gateway)
+- `postgresql` - PostgreSQL StatefulSet
+- `redis` - Redis Deployment
+- `rabbitmq` - RabbitMQ StatefulSet
+- `envoy-gateway` - Envoy Gateway controller
+- `ingress-gateway` - Gateway and HTTPRoute resources
 
 ## Development Workflows
 
-### Workflow 1: Full Stack in Docker
+### Workflow 1: Full Stack via Tilt (Recommended)
 
-**Best for:** Testing complete system, minimal setup
+**Best for:** Most development scenarios
 
 ```bash
 cd orchestration/
-docker compose up -d
+tilt up
 ```
 
-**All services in Docker:**
-- Fast setup (one command)
-- Production-like environment
-- Slower iteration (rebuild containers)
+**All services in Kubernetes:**
+- Live reload for all services
+- Automatic rebuilds on file changes
+- Unified logging in Tilt UI
 
-### Workflow 2: Backend Local, Frontend Docker
+### Workflow 2: Backend Service Local, Rest in Tilt
 
-**Best for:** Backend development
+**Best for:** Debugging a specific backend service
 
 ```bash
-# Start infrastructure + frontend
-cd orchestration/
-docker compose up -d postgres redis rabbitmq api-gateway budget-analyzer-web
+# Start everything in Tilt
+tilt up
 
-# Run backend locally
+# Scale down the service you want to debug
+kubectl scale deployment transaction-service -n budget-analyzer --replicas=0
+
+# Run locally with debugger
 cd transaction-service/
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
 **Benefits:**
-- Hot reload for backend code
-- Fast iteration on backend
-- Frontend still available
+- Full debugging capabilities with IDE
+- Breakpoints and step-through debugging
+- Service still accessible via port forward
 
-### Workflow 3: Frontend Local, Backend Docker
+### Workflow 3: Frontend Local, Backend in Tilt
 
-**Best for:** Frontend development
+**Best for:** Frontend development with HMR
 
 ```bash
-# Start infrastructure + backend
-cd orchestration/
-docker compose up -d postgres redis rabbitmq api-gateway \
-  transaction-service currency-service
+# Start backend in Tilt
+tilt up
+
+# Scale down frontend
+kubectl scale deployment budget-analyzer-web -n budget-analyzer --replicas=0
 
 # Run frontend locally
 cd budget-analyzer-web/
-npm start
+npm install
+npm run dev
 ```
 
 **Benefits:**
-- Hot reload for frontend code
-- Fast iteration on React components
-- Backend APIs available
-
-### Workflow 4: Everything Local
-
-**Best for:** Full-stack development, debugging
-
-```bash
-# Start only infrastructure
-cd orchestration/
-docker compose up -d postgres redis rabbitmq api-gateway
-
-# Terminal 1: transaction-service
-cd transaction-service/
-./gradlew bootRun
-
-# Terminal 2: currency-service
-cd currency-service/
-./gradlew bootRun
-
-# Terminal 3: frontend
-cd budget-analyzer-web/
-npm start
-```
-
-**Benefits:**
-- Maximum development speed
-- Full debugging capabilities
-- IDE integration for all services
-
-**Drawbacks:**
-- More terminal windows
-- More resource intensive
-- More setup required
+- Faster HMR (Hot Module Replacement)
+- Local debugging tools
 
 ## Database Setup
 
@@ -295,7 +214,7 @@ See: [database-setup.md](database-setup.md) for detailed database configuration.
 
 **Quick reference:**
 ```bash
-# PostgreSQL connection
+# PostgreSQL connection (via port forward)
 Host: localhost
 Port: 5432
 Database: budget_analyzer
@@ -306,25 +225,30 @@ Password: budget_analyzer
 postgresql://budget_analyzer:budget_analyzer@localhost:5432/budget_analyzer
 ```
 
+
 ## Port Reference
 
 | Service | Port | URL | Notes |
 |---------|------|-----|-------|
-| NGINX Gateway | 443 | https://app.budgetanalyzer.localhost | **Primary browser entry point** |
-| NGINX API | 443 | https://api.budgetanalyzer.localhost | API gateway (behind Session Gateway) |
-| Session Gateway | 8081 | - | Internal (behind NGINX) |
-| Frontend (React dev server) | 3000 | - | Internal (behind NGINX) |
-| transaction-service | 8082 | http://localhost:8082 | Direct access for development/debugging |
-| currency-service | 8084 | http://localhost:8084 | Direct access for development/debugging |
+| Envoy Gateway | 443 | https://app.budgetanalyzer.localhost | **Primary browser entry point** |
+| Envoy Gateway | 443 | https://api.budgetanalyzer.localhost | API gateway |
+| NGINX Gateway | 8080 | - | Internal (JWT validation, routing) |
+| Session Gateway | 8081 | - | Internal (behind Envoy) |
+| transaction-service | 8082 | http://localhost:8082 | Direct access via port forward |
+| currency-service | 8084 | http://localhost:8084 | Direct access via port forward |
+| permission-service | 8086 | http://localhost:8086 | Direct access via port forward |
+| Token Validation | 8088 | http://localhost:8088 | Direct access via port forward |
+| Frontend | 3000 | http://localhost:3000 | Direct access via port forward |
 | PostgreSQL | 5432 | localhost:5432 | Database access |
 | Redis | 6379 | localhost:6379 | Cache access |
-| RabbitMQ Management | 15672 | http://localhost:15672 | Management UI |
+| RabbitMQ | 5672/15672 | localhost:15672 | Management UI |
+| Tilt UI | 10350 | http://localhost:10350 | Development dashboard |
 
 ## Environment Variables
 
 ### Backend Services (Spring Boot)
 
-Create `application-local.yml` in each service:
+Environment variables are injected via Kubernetes secrets. For local development outside Tilt, create `application-local.yml`:
 
 ```yaml
 spring:
@@ -343,7 +267,6 @@ spring:
     username: guest
     password: guest
 
-# Service-specific config
 server:
   port: 8082  # Change per service
 ```
@@ -367,112 +290,113 @@ VITE_ENABLE_ANALYTICS=true
 
 ## Troubleshooting
 
-### Port Already in Use
+### Port Already in Use (Tilt)
+
+If you see this error when running `tilt up`:
+```
+Error: Tilt cannot start because you already have another process on port 10350
+```
+
+**Check what's using the port:**
+```bash
+lsof -i :10350
+```
+
+**Common cause:** VS Code port forwarding is reserving the port. If you see `code` as the process:
+```
+COMMAND    PID  USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+code    151299 devex   93u  IPv4 584246      0t0  TCP localhost:10350 (LISTEN)
+```
+
+**Solution:** Disable VS Code auto port forwarding in your user settings:
+```json
+{
+  "remote.autoForwardPorts": false
+}
+```
+
+Then restart VS Code. See the [Sandboxed Container Configuration](#sandboxed-container-configuration) section for more details.
+
+### Pod Not Starting
 
 ```bash
-# Find process using port
-lsof -i :8082
+# Check pod status and events
+kubectl describe pod -n budget-analyzer <pod-name>
 
-# Kill process
-kill -9 <PID>
+# Check logs
+kubectl logs -n budget-analyzer <pod-name>
 
-# Or change port in docker compose.yml
+# Check Tilt UI for compile errors
+# http://localhost:10350
 ```
 
 ### Database Connection Refused
 
 ```bash
 # Check if PostgreSQL is running
-docker compose ps postgres
+kubectl get pods -n infrastructure | grep postgresql
 
 # View PostgreSQL logs
-docker logs postgres
+kubectl logs -n infrastructure postgresql-0
 
-# Restart PostgreSQL
-docker compose restart postgres
+# Verify port forward is active
+kubectl port-forward -n infrastructure svc/postgresql 5432:5432
 ```
 
 ### Service Not Responding
 
 ```bash
+# Check service endpoints
+kubectl get endpoints -n budget-analyzer <service-name>
+
 # Check service logs
-docker compose logs transaction-service
+kubectl logs -n budget-analyzer deployment/<service-name>
 
 # Check if service is healthy
-curl http://localhost:8082/actuator/health
-
-# Restart service
-docker compose restart transaction-service
-```
-
-### Frontend Not Loading
-
-```bash
-# Check if frontend is running
-docker compose ps budget-analyzer-web
-
-# View frontend logs
-docker logs budget-analyzer-web
-
-# Check if API gateway is accessible
-curl https://api.budgetanalyzer.localhost/health
-
-# Rebuild frontend
-docker compose up -d --build budget-analyzer-web
+curl http://localhost:<port>/actuator/health
 ```
 
 ### NGINX Gateway Issues
 
 ```bash
 # Check NGINX config syntax
-docker exec api-gateway nginx -t
+kubectl exec -n budget-analyzer deployment/nginx-gateway -- nginx -t
 
 # View NGINX logs
-docker logs api-gateway
+kubectl logs -n budget-analyzer deployment/nginx-gateway
 
-# Reload NGINX config
-docker exec api-gateway nginx -s reload
-
-# Restart gateway
-docker compose restart api-gateway
+# Trigger config reload
+tilt trigger nginx-gateway-config
 ```
 
-## Data Seeding
-
-### Test Data
+### Envoy Gateway Issues
 
 ```bash
-# Seed test transactions
-curl -X POST http://localhost:8082/admin/seed-test-data
+# Check Envoy Gateway controller
+kubectl logs -n envoy-gateway-system deployment/envoy-gateway
 
-# Seed currencies (one-time)
-curl -X POST http://localhost:8084/admin/seed-currencies
+# Check Gateway status
+kubectl get gateway -n budget-analyzer
+
+# Check HTTPRoute status
+kubectl get httproute -n budget-analyzer
 ```
 
-### Sample CSV Files
+### SSL Certificate Errors
 
-Located in: `transaction-service/src/test/resources/csv-samples/`
+```bash
+# Re-run certificate setup on HOST
+./scripts/dev/setup-k8s-tls.sh
 
-**Upload via frontend:**
-1. Go to https://app.budgetanalyzer.localhost
-2. Click "Import"
-3. Select CSV file
-4. Choose bank format
-5. Upload
+# Verify secret exists
+kubectl get secret -n budget-analyzer wildcard-tls
+
+# Restart browser to clear certificate cache
+```
 
 ## IDE Setup
 
-### IntelliJ IDEA
-
-**Import Projects:**
-1. File → Open → Select `orchestration/` directory
-2. Import as Gradle project
-3. Repeat for each service repository
-
-**Run Configurations:**
-- Create Spring Boot run config for each service
-- Set working directory to service root
-- Add `--spring.profiles.active=local` to VM options
+> **Note:** IntelliJ IDEA is not supported. It cannot run containerized AI agents, making it unsuitable for AI-assisted development workflows.
 
 ### VS Code
 
@@ -481,6 +405,7 @@ Located in: `transaction-service/src/test/resources/csv-samples/`
 - Gradle for Java
 - ESLint (for frontend)
 - Prettier (for frontend)
+- Kubernetes (for cluster inspection)
 
 **workspace.code-workspace:**
 ```json
@@ -495,9 +420,25 @@ Located in: `transaction-service/src/test/resources/csv-samples/`
 }
 ```
 
+**Sandboxed Container Configuration:**
+
+When running VS Code in a sandboxed container (e.g., for AI agent development), disable automatic port forwarding to ensure complete isolation:
+
+```json
+// VS Code User Settings (not workspace settings)
+{
+  "remote.autoForwardPorts": false
+}
+```
+
+**Why disable port forwarding?**
+- **True isolation**: No accidental leakage between container and host
+- **No port conflicts**: VS Code won't claim ports needed by Tilt or other services
+- **Cleaner workflow**: No need to manage or kill processes on the host
+
+**Note:** This setting goes in your VS Code user settings (`Ctrl/Cmd + ,`), not in the workspace `.vscode/settings.json` file.
+
 ## Next Steps
 
 - **Database:** [database-setup.md](database-setup.md)
-- **Debugging:** [debugging-guide.md](debugging-guide.md)
-- **Testing:** [testing-strategy.md](testing-strategy.md)
 - **Architecture:** [../architecture/system-overview.md](../architecture/system-overview.md)

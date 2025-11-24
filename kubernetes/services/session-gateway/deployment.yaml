@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-gateway
+  namespace: default
+  labels:
+    app: session-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: session-gateway
+  template:
+    metadata:
+      labels:
+        app: session-gateway
+    spec:
+      containers:
+      - name: session-gateway
+        image: session-gateway:latest
+        imagePullPolicy: Never  # Use local Kind image
+        ports:
+        - containerPort: 8081
+          name: http
+        env:
+        # Spring profile
+        - name: SPRING_PROFILES_ACTIVE
+          value: "kubernetes"
+        # Backend routing (key change from dev)
+        - name: BACKEND_URI
+          valueFrom:
+            configMapKeyRef:
+              name: session-gateway-config
+              key: BACKEND_URI
+        # Frontend routing
+        - name: FRONTEND_URI
+          valueFrom:
+            configMapKeyRef:
+              name: session-gateway-config
+              key: FRONTEND_URI
+        # Redis connection
+        - name: SPRING_DATA_REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: host
+        - name: SPRING_DATA_REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: port
+        # Auth0 Configuration - loaded from secret via envFrom
+        envFrom:
+        - secretRef:
+            name: auth0-credentials
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 120
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3

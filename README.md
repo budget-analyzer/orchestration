@@ -18,41 +18,50 @@ The application follows a microservices architecture with BFF (Backend for Front
   - Transaction Service - Manages financial transactions
   - Currency Service - Handles currencies and exchange rates
   - Token Validation Service - JWT validation for NGINX
+- **Ingress**: Envoy Gateway for SSL termination
 - **API Gateway**: NGINX reverse proxy for request routing and JWT validation
 - **Infrastructure**: PostgreSQL, Redis, RabbitMQ
+- **Development**: Tilt + Kind (local Kubernetes)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose
+- Docker (for building images)
+- Kind (local Kubernetes cluster)
+- kubectl (Kubernetes CLI)
+- Helm (for installing Envoy Gateway)
+- Tilt (development workflow orchestration)
 - JDK 24 (for local Spring Boot development)
 - Node.js 18+ (for local React development)
 - mkcert (for local HTTPS certificates)
 
-**First-time setup**: Run `./scripts/setup-local-https.sh` to generate trusted HTTPS certificates, then see [docs/development/getting-started.md](docs/development/getting-started.md)
+**Check prerequisites**: Run `./scripts/dev/check-tilt-prerequisites.sh`
+
+**First-time setup**: Run `./scripts/dev/setup-k8s-tls.sh` to generate trusted HTTPS certificates, then see [docs/development/getting-started.md](docs/development/getting-started.md)
 
 ### Running the Application
 
 ```bash
-# Start all infrastructure services
-docker compose up -d
+# Start all services with Tilt
+tilt up
 
-# View logs
-docker compose logs -f
+# Access Tilt UI for logs and status
+# Browser: http://localhost:10350
 
 # Stop all services
-docker compose down
+tilt down
 ```
 
 The application will be available at `https://app.budgetanalyzer.localhost`
 
-> **Note**: This local development setup uses HTTPS with mkcert-generated certificates for a production-like experience. The current architecture is dev-specific and doesn't fully mirror production yet - it will likely be replaced by k3s or similar in the future.
+> **Note**: This local development setup uses HTTPS with mkcert-generated certificates and runs on a local Kind Kubernetes cluster managed by Tilt.
 
 ### Service Ports
 
-- NGINX Gateway: `443` (HTTPS - browser entry point for app. and api. subdomains)
-- Session Gateway (BFF): `8081` (internal, behind NGINX)
+- Envoy Gateway: `443` (HTTPS - browser entry point for app. and api. subdomains)
+- NGINX Gateway: `8080` (internal, JWT validation and routing)
+- Session Gateway (BFF): `8081` (internal)
 - Token Validation Service: `8088` (internal)
 - PostgreSQL: `5432`
 - Redis: `6379`
@@ -62,12 +71,13 @@ The application will be available at `https://app.budgetanalyzer.localhost`
 
 ```
 orchestration/
-├── docker-compose.yml    # Service definitions
+├── Tiltfile              # Development workflow orchestration
+├── tilt/                 # Tilt configuration modules
+├── kubernetes/           # Kubernetes manifests
 ├── nginx/                # API gateway configuration
 ├── postgres-init/        # Database initialization scripts
 ├── scripts/              # Automation tools
-├── docs/                 # Cross-service documentation
-└── kubernetes/           # Production deployment manifests (future)
+└── docs/                 # Cross-service documentation
 ```
 
 ## Service Repositories
@@ -102,8 +112,9 @@ See [CLAUDE.md](CLAUDE.md)
 - **Database**: PostgreSQL
 - **Cache**: Redis
 - **Message Queue**: RabbitMQ
+- **Ingress**: Envoy Gateway (Kubernetes Gateway API)
 - **API Gateway**: NGINX
-- **Container Orchestration**: Docker Compose
+- **Development**: Tilt + Kind (local Kubernetes)
 
 ## License
 
