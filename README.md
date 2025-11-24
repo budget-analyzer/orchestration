@@ -4,9 +4,23 @@ A production-grade microservices financial management system built as an open-so
 
 ## Prerequisites
 
-VS Code, Docker, Kind, kubectl, Helm, Tilt, JDK 24, Node.js 18+, mkcert
+**Host Tools**: Docker, Kind, kubectl, Helm, Tilt, mkcert
 
-> **Editor Requirement**: VS Code is required. We use open source tools only—Cursor is closed source. The devcontainer auto-configures your environment.
+**Optional**: JDK 24, Node.js 18+ (only if running services locally)
+
+### Development Environment
+
+**This project is designed for AI-assisted development.**
+
+**Required**: VS Code with Dev Containers extension
+
+**Not supported**: Cursor (closed source), IntelliJ (no container support)
+
+The devcontainer provides a safe isolated environment for AI agents with pre-installed tools (JDK, Node.js, Maven, Docker CLI) and workspace-wide repository access.
+
+> **Note**: You can work without AI using any IDE, but this is an AI-first learning resource.
+
+See [CLAUDE.md](CLAUDE.md#development-environment-requirements) for details.
 
 ## Quick Start
 

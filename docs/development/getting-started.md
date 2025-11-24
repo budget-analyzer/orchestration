@@ -2,27 +2,37 @@
 
 ## Prerequisites
 
-- **VS Code** with [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) (required)
+**This project is designed for AI-assisted development.** Containerized agents are mandatory.
+
+### Required Setup
+
+**VS Code with [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)**
+
+The devcontainer provides:
+- Ubuntu 24.04 sandbox with safe sudo access for AI agents
+- Pre-installed: JDK 24, Node.js, Maven, Docker CLI, Git
+- Workspace-wide access to all repositories
+- Isolation from your host system
+
+**Host machine tools:**
 - Docker ([installation guide](https://docs.docker.com/get-docker/))
 - Kind (local Kubernetes cluster)
 - kubectl (Kubernetes CLI)
 - Helm (for installing Envoy Gateway)
 - Tilt (development workflow orchestration)
-- JDK 24 (for Spring Boot development)
-- Node.js 18+ (for React development)
 - mkcert (for local HTTPS certificates)
-- Git
 
-> **Editor Requirement**
->
-> VS Code is required, not optional. We use open source tools only—Cursor is closed source.
->
-> The `.devcontainer/devcontainer.json` auto-configures your environment with pre-installed extensions and settings. This is convention over configuration: clone, open in VS Code, and the devcontainer handles the rest.
+**Not supported**:
+- **Cursor**: Closed source
+- **IntelliJ IDEA**: No containerized agent support
+- **Any editor without containerized agent architecture**
 
-Check prerequisites with:
+Check host prerequisites:
 ```bash
 ./scripts/dev/check-tilt-prerequisites.sh
 ```
+
+> **Note**: You can work on this codebase without AI using any IDE, but that's not the focus of this project. This is an AI-first learning resource for architects exploring AI-assisted development.
 
 ## Quick Start
 
@@ -90,7 +100,16 @@ The Tilt UI at http://localhost:10350 provides:
 
 **Key Resources:**
 - `service-common-publish` - Builds shared library
+- `service-common-compile` - Compiles service-common (special behavior, see below)
 - `*-compile` - Compiles each service
+
+### Localhost CI/CD
+
+**service-common has special behavior**: When you click the `service-common-compile` button in the Tilt UI, it automatically triggers recompilation of all downstream services that depend on it (transaction-service, currency-service, permission-service, session-gateway, token-validation-service).
+
+This is **localhost CI/CD** - simulating a CI/CD pipeline dependency graph locally. When the shared library changes, all consumers rebuild automatically, just like a real CI/CD system would do.
+
+**Current state**: This is as far as the localhost CI/CD implementation goes. The foundation is there (dependency tracking, automatic downstream triggers), but it didn't get taken further. Think of it as CI/CD-lite for local development.
 
 ## Access Patterns
 

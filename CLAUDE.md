@@ -6,6 +6,30 @@ This orchestration repository coordinates the deployment and development environ
 
 **Purpose**: Manages cross-service concerns, local development setup, and deployment coordination. Individual service code lives in separate repositories.
 
+## Development Environment Requirements
+
+**This project is designed for AI-assisted development. Containerized agents are the default and expected approach.**
+
+### AI-Assisted Development (Primary Approach)
+
+**Required**: VS Code with Dev Containers extension
+
+**Why containerized agents are mandatory**:
+- AI agents need safe sudo access (container provides isolation from host system)
+- Consistent tooling pre-installed (JDK, Node.js, Maven, Docker CLI)
+- Workspace-wide context (all repositories accessible under `/workspace`)
+
+**Not supported**:
+- **Cursor**: Closed source, violates open source tool policy
+- **IntelliJ IDEA**: No containerized agent support
+- **Any editor without containerized agent architecture**: Cannot provide safe AI execution environment
+
+This is non-negotiable. AI agents operating outside containerized environments pose security risks and lack the consistent tooling required for this project.
+
+### Traditional Development (Not the Focus)
+
+You can work on this codebase without AI using any IDE (IntelliJ IDEA, VS Code, etc.), but that's the before times. This is an AI-first learning resource for architects exploring AI-assisted development.
+
 ## Architecture Principles
 
 - **Production Parity**: Development environment faithfully recreates production
@@ -199,16 +223,21 @@ kubectl get pods -n budget-analyzer -o jsonpath='{.items[*].spec.containers[*].i
 ## Development Workflow
 
 ### Prerequisites
-- VS Code with Dev Containers extension (required—we use open source tools only, Cursor is closed source)
-- Docker (for building images)
+
+**See [Development Environment Requirements](#development-environment-requirements) for AI-assisted development setup.**
+
+**Host machine tools** (required for running Kubernetes development environment):
+- Docker (for building images and running Kind)
 - Kind (local Kubernetes cluster)
 - kubectl (Kubernetes CLI)
 - Helm (for installing Envoy Gateway)
 - Tilt (development workflow orchestration)
-- JDK 17+ (for local Spring Boot development)
-- Node.js 18+ (for local React development)
 - Git
 - mkcert (for local HTTPS certificates)
+
+**Optional for local service development** (not required if using Tilt):
+- JDK 17+ (for local Spring Boot development)
+- Node.js 18+ (for local React development)
 
 Check prerequisites with:
 ```bash
@@ -264,6 +293,14 @@ tilt up
 # Stop all services
 tilt down
 ```
+
+### Tilt UI and Localhost CI/CD
+
+**Tilt UI** (http://localhost:10350) provides resource status, logs, and action buttons.
+
+**Localhost CI/CD**: service-common has special behavior. Clicking the `service-common-compile` button in Tilt UI automatically triggers recompilation of all downstream services (transaction-service, currency-service, permission-service, session-gateway, token-validation-service).
+
+This simulates CI/CD dependency graphs locally - when the shared library changes, all consumers rebuild automatically. The foundation is there (dependency tracking, automatic downstream triggers), but it didn't get taken further. Think of it as CI/CD-lite for local development.
 
 ### Troubleshooting
 
