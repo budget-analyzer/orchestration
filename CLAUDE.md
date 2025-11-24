@@ -199,6 +199,7 @@ kubectl get pods -n budget-analyzer -o jsonpath='{.items[*].spec.containers[*].i
 ## Development Workflow
 
 ### Prerequisites
+- VS Code with Dev Containers extension (required—we use open source tools only, Cursor is closed source)
 - Docker (for building images)
 - Kind (local Kubernetes cluster)
 - kubectl (Kubernetes CLI)

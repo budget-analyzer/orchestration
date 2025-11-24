@@ -4,7 +4,9 @@ A production-grade microservices financial management system built as an open-so
 
 ## Prerequisites
 
-Docker, Kind, kubectl, Helm, Tilt, JDK 24, Node.js 18+, mkcert
+VS Code, Docker, Kind, kubectl, Helm, Tilt, JDK 24, Node.js 18+, mkcert
+
+> **Editor Requirement**: VS Code is required. We use open source tools only—Cursor is closed source. The devcontainer auto-configures your environment.
 
 ## Quick Start
 

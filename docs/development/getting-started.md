@@ -2,6 +2,7 @@
 
 ## Prerequisites
 
+- **VS Code** with [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) (required)
 - Docker ([installation guide](https://docs.docker.com/get-docker/))
 - Kind (local Kubernetes cluster)
 - kubectl (Kubernetes CLI)
@@ -11,6 +12,12 @@
 - Node.js 18+ (for React development)
 - mkcert (for local HTTPS certificates)
 - Git
+
+> **Editor Requirement**
+>
+> VS Code is required, not optional. We use open source tools only—Cursor is closed source.
+>
+> The `.devcontainer/devcontainer.json` auto-configures your environment with pre-installed extensions and settings. This is convention over configuration: clone, open in VS Code, and the devcontainer handles the rest.
 
 Check prerequisites with:
 ```bash

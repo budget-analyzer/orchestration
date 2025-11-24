@@ -11,8 +11,11 @@ Budget Analyzer is a reference architecture for enterprise architects and senior
 ## Getting Started
 
 1. Clone all repositories side-by-side in a common parent directory
-2. Follow the setup in the [orchestration README](README.md)
-3. Run `tilt up` and you're coding
+2. Open in VS Code—the devcontainer auto-configures your environment
+3. Follow the setup in the [orchestration README](README.md)
+4. Run `tilt up` and you're coding
+
+> **Note**: VS Code is required. We use open source tools only—Cursor is closed source.
 
 ## How to Contribute
 
