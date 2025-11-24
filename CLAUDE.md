@@ -14,92 +14,79 @@ This orchestration repository coordinates the deployment and development environ
 - **API Gateway Pattern**: NGINX provides unified routing, JWT validation, and load balancing
 - **Resource-Based Routing**: Frontend remains decoupled from service topology
 - **Defense in Depth**: Multiple security layers (Session Gateway → NGINX → Services)
-- **Containerization**: Docker and Docker Compose for consistent environments
+- **Kubernetes-Native Development**: Tilt + Kind for consistent local Kubernetes development
 
 ## Service Architecture
 
-**Pattern**: Microservices defined in [docker compose.yml](docker compose.yml)
+**Pattern**: Microservices deployed via Tilt to local Kind cluster
 
 **Discovery**:
 ```bash
-# List all services
-docker compose config --services
+# List all running resources
+tilt get uiresources
 
-# View service details and ports
-docker compose config
+# View pod status
+kubectl get pods -n budget-analyzer
 
-# See running services
-docker compose ps
+# View service endpoints
+kubectl get svc -n budget-analyzer
 ```
 
 **Service Types**:
-- **Frontend services**: React-based web applications (typically port 3000 in dev)
-- **Backend microservices**: Spring Boot REST APIs (ports 8082+, see docker compose.yml)
-- **Session Gateway (BFF)**: Spring Cloud Gateway (port 8081, HTTP) - browser authentication and session management (behind NGINX)
+- **Frontend services**: React-based web applications (port 3000 in dev)
+- **Backend microservices**: Spring Boot REST APIs (ports 8082+)
+- **Session Gateway (BFF)**: Spring Cloud Gateway (port 8081, HTTP) - browser authentication and session management
 - **Token Validation Service**: Spring Boot service (port 8088) - JWT validation for NGINX
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
-- **API Gateway**: NGINX reverse proxy (port 443, HTTPS) - SSL termination, routing, and JWT validation
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (in infrastructure namespace)
+- **Ingress**: Envoy Gateway (port 443, HTTPS) - SSL termination and initial routing
+- **API Gateway**: NGINX (port 8080, HTTP) - internal routing, JWT validation, and load balancing
 
 **Adding New Services**:
-1. Add service to [docker compose.yml](docker compose.yml)
-2. Add routes to [nginx/nginx.dev.conf](nginx/nginx.dev.conf) if frontend-facing
-3. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
+1. Create Kubernetes manifests in `kubernetes/services/{service-name}/`
+2. Add service to `Tiltfile` using `spring_boot_service()` pattern
+3. Add routes to `nginx/nginx.k8s.conf` if frontend-facing
+4. Follow naming: `{domain}-service` for backends, `{domain}-web` for frontends
 
 ## BFF + API Gateway Hybrid Pattern
 
 **Pattern**: Hybrid architecture combining Backend-for-Frontend (BFF) for browser security with API Gateway for routing and validation.
 
-### Architecture Flow
+### Request Flow
 
-**Browser Traffic** (OAuth2/Session-based):
-```
-Browser → NGINX (app.budgetanalyzer.localhost:443) → Session Gateway (8081) → NGINX (api.budgetanalyzer.localhost:443) → Backend Services
-```
+**All browser traffic goes through Session Gateway.** Think of it as a maxiservice.
 
-**M2M Traffic** (Direct JWT):
 ```
-API Client → NGINX (api.budgetanalyzer.localhost:443) → Backend Services
+Browser → Envoy (:443) → Session Gateway (:8081) → Envoy → NGINX (:8080) → Services
 ```
 
-### Tilt/Kubernetes Architecture (Current)
+- **Envoy**: SSL termination for all traffic
+- **Session Gateway**: JWT lookup from Redis, inject into header
+- **NGINX**: JWT validation, route to service
 
-**IMPORTANT**: The flows above are for Docker Compose. In Tilt/Kubernetes, Envoy Gateway replaces NGINX for SSL termination and initial routing. NGINX is NOT in the session-gateway path.
-
-**Flow 1: Browser Authentication (app.budgetanalyzer.localhost)**
-```
-Browser → Envoy Gateway → session-gateway
-```
-- **No NGINX in this path**
-- Envoy should NOT set X-Forwarded-Host (no URL rewriting occurs)
-- Session-gateway uses Host header: `app.budgetanalyzer.localhost`
-- Cookie domain derived from Host header
-
-**Flow 2: API Requests (api.budgetanalyzer.localhost)**
-```
-Browser/session-gateway → Envoy Gateway → NGINX → backend services
-```
-- Envoy may rewrite Host to internal service name
-- X-Forwarded-Host should preserve: `api.budgetanalyzer.localhost`
-- Backend services see original client hostname
-
-**Header Rules**
-- **X-Forwarded-Host**: Only set when URL/host rewriting occurs
-- **Host**: Original value when no rewriting; internal service name when rewriting
+**Two entry points:**
+- `app.budgetanalyzer.localhost` → Envoy → Session Gateway (browser auth)
+- `api.budgetanalyzer.localhost` → Envoy → NGINX (API gateway)
 
 ### Component Roles
 
-**NGINX (Port 443, HTTPS) - API Gateway Layer**:
-- **Purpose**: SSL termination, routing, JWT validation, and request processing
+**Envoy Gateway (Port 443, HTTPS) - Ingress Layer**:
+- **Purpose**: SSL termination and initial routing
 - **Responsibilities**:
   - Handles SSL/TLS termination for both app. and api. subdomains
-  - Proxies app.budgetanalyzer.localhost to Session Gateway
+  - Routes app.budgetanalyzer.localhost to Session Gateway
+  - Routes api.budgetanalyzer.localhost to NGINX
+  - Provides Gateway API-compliant ingress
+- **Key Benefit**: Modern, Kubernetes-native ingress with SSL termination
+
+**NGINX (Port 8080, HTTP) - API Gateway Layer**:
+- **Purpose**: JWT validation, routing, and request processing
+- **Responsibilities**:
   - Validates JWTs via Token Validation Service (auth_request directive)
   - Routes requests to appropriate microservices
   - Resource-based routing with path transformation
   - Rate limiting per user/IP
   - Load balancing and circuit breaking
-  - Serves React frontend (proxied from Vite dev server in development)
-- **Key Benefit**: Single entry point for all HTTPS traffic, eliminates privileged port issues
+- **Key Benefit**: Centralized JWT validation and routing logic
 
 **Session Gateway (Port 8081, HTTP) - BFF Layer**:
 - **Purpose**: Browser authentication and session security
@@ -138,22 +125,21 @@ Browser → Session Gateway (app.budgetanalyzer.localhost) → NGINX (api.budget
 **Pattern**: Frontend calls clean paths like `/api/transactions`, NGINX routes to appropriate microservice with path transformation.
 
 **Quick Reference**:
-- All routes defined in [nginx/nginx.dev.conf](nginx/nginx.dev.conf)
+- All routes defined in [nginx/nginx.k8s.conf](nginx/nginx.k8s.conf)
 - Routing pattern: `location /api/{resource}` → `rewrite ^/api/(.*)$` → `proxy_pass http://{upstream}`
 - JWT validation via `auth_request /auth/validate` on all protected routes
-- Services use `host.docker.internal` to reach host services from Docker container
-- WebSocket support included for React HMR (hot module replacement)
+- Services accessed via Kubernetes DNS names
 - Benefits: Frontend decoupled from service topology, services can be split/merged without frontend changes
 
 **Discovery** (inspect routes without reading full config):
 ```bash
 # List all API routes
-grep "location /api" nginx/nginx.dev.conf | grep -v "#"
+grep "location /api" nginx/nginx.k8s.conf | grep -v "#"
 
-# Test Session Gateway health (via NGINX)
+# Test Session Gateway health
 curl -v https://app.budgetanalyzer.localhost/actuator/health
 
-# Test NGINX Gateway directly
+# Test API Gateway
 curl -v https://api.budgetanalyzer.localhost/health
 ```
 
@@ -167,9 +153,9 @@ curl -v https://api.budgetanalyzer.localhost/health
 
 | Port | Service | Purpose | Access |
 |------|---------|---------|--------|
-| 443 | NGINX Gateway | SSL termination, routing (HTTPS) | Public (browsers via app. and api.budgetanalyzer.localhost) |
-| 80 | NGINX Gateway | HTTP redirect to HTTPS | Public (redirects only) |
-| 8081 | Session Gateway | Browser authentication, session management | Internal (NGINX only) |
+| 443 | Envoy Gateway | SSL termination, ingress (HTTPS) | Public (browsers via app. and api.budgetanalyzer.localhost) |
+| 8080 | NGINX Gateway | JWT validation, routing | Internal (Envoy only) |
+| 8081 | Session Gateway | Browser authentication, session management | Internal (Envoy only) |
 | 8088 | Token Validation | JWT signature verification | Internal (NGINX only) |
 | 8082 | Transaction Service | Business logic | Internal (NGINX only) |
 | 8084 | Currency Service | Business logic | Internal (NGINX only) |
@@ -178,7 +164,7 @@ curl -v https://api.budgetanalyzer.localhost/health
 ### Security Benefits
 
 **Defense in Depth**:
-1. **NGINX SSL Termination**: Handles all HTTPS traffic, routes to internal services
+1. **Envoy Gateway**: SSL termination for all traffic
 2. **Session Gateway**: Prevents JWT exposure to browser (XSS protection)
 3. **NGINX auth_request**: Validates every API request before routing
 4. **Token Validation Service**: Cryptographic JWT verification
@@ -192,37 +178,48 @@ curl -v https://api.budgetanalyzer.localhost/health
 
 **Discovery**:
 ```bash
-# List infrastructure versions
-docker compose config | grep 'image:' | sort -u
+# List all Tilt resources
+tilt get uiresources
 
-# Check service ports
-grep -A 3 "ports:" docker compose.yml
+# View deployed images
+kubectl get pods -n budget-analyzer -o jsonpath='{.items[*].spec.containers[*].image}' | tr ' ' '\n' | sort -u
 ```
 
 **Stack Patterns**:
 - **Frontend**: React (see individual service package.json)
 - **Backend**: Spring Boot + Java (version managed in service-common)
 - **Build System**: Gradle (all backend services use Gradle with wrapper)
-- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (see docker compose.yml)
-- **Gateway**: NGINX (Alpine-based)
+- **Infrastructure**: PostgreSQL, Redis, RabbitMQ (Kubernetes manifests in `kubernetes/infrastructure/`)
+- **Ingress**: Envoy Gateway (Kubernetes Gateway API)
+- **API Gateway**: NGINX (Alpine-based)
+- **Development**: Tilt + Kind (local Kubernetes)
 
 **Note**: Docker images should be pinned to specific versions for reproducibility.
 
 ## Development Workflow
 
 ### Prerequisites
-- Docker and Docker Compose
+- Docker (for building images)
+- Kind (local Kubernetes cluster)
+- kubectl (Kubernetes CLI)
+- Helm (for installing Envoy Gateway)
+- Tilt (development workflow orchestration)
 - JDK 17+ (for local Spring Boot development)
 - Node.js 18+ (for local React development)
 - Git
 - mkcert (for local HTTPS certificates)
 
+Check prerequisites with:
+```bash
+./scripts/dev/check-tilt-prerequisites.sh
+```
+
 ### First Time Setup
 
 **HTTPS Certificate Setup**:
 The application uses HTTPS for local development with clean subdomain URLs:
-- Browser entry point: `https://app.budgetanalyzer.localhost` (NGINX → Session Gateway)
-- API Gateway: `https://api.budgetanalyzer.localhost` (NGINX → Backend Services)
+- Browser entry point: `https://app.budgetanalyzer.localhost` (Envoy → Session Gateway)
+- API Gateway: `https://api.budgetanalyzer.localhost` (Envoy → NGINX → Backend Services)
 
 Run the setup script to generate trusted local certificates:
 ```bash
@@ -231,14 +228,14 @@ Run the setup script to generate trusted local certificates:
 # Linux:   See https://github.com/FiloSottile/mkcert#installation
 # Windows: choco install mkcert
 
-# Generate certificates and configure JVM truststore
-./scripts/dev/setup-local-https.sh
+# Generate certificates and create Kubernetes TLS secret
+./scripts/dev/setup-k8s-tls.sh
 ```
 
 This script will:
 1. Install a local Certificate Authority (CA) in your system's trust store
 2. Generate a wildcard certificate for `*.budgetanalyzer.localhost`
-3. Convert the certificate to PKCS12 format for Spring Boot
+3. Create Kubernetes TLS secret for Envoy Gateway
 4. Your browser will automatically trust these certificates (no warnings!)
 
 **Environment Variables Setup**:
@@ -254,37 +251,40 @@ The `.env` file is gitignored and loaded by Tilt via the dotenv extension. No sh
 
 ### Quick Start
 ```bash
-# Start all infrastructure
-docker compose up -d
+# Start all services with Tilt
+tilt up
 
-# View logs
-docker compose logs -f
+# Access Tilt UI for logs and status
+# Browser: http://localhost:10350
 
 # Access application
 # Browser: https://app.budgetanalyzer.localhost
 
 # Stop all services
-docker compose down
+tilt down
 ```
 
 ### Troubleshooting
 
 **Quick commands**:
 ```bash
+# Check pod status
+kubectl get pods -n budget-analyzer
+
+# View logs for a service
+kubectl logs -n budget-analyzer deployment/nginx-gateway
+
 # Check NGINX configuration validity
-docker exec api-gateway nginx -t
+kubectl exec -n budget-analyzer deployment/nginx-gateway -- nginx -t
 
-# View NGINX logs
-docker logs api-gateway
+# View Envoy Gateway logs
+kubectl logs -n envoy-gateway-system deployment/envoy-gateway
 
-# Reload NGINX without downtime
-docker exec api-gateway nginx -s reload
-
-# Test service connectivity
-docker compose ps
+# Reset databases to clean state (in Tilt UI)
+# Click "reset-databases" button → automatically runs migrations
 ```
 
-**For detailed troubleshooting**: When encountering specific issues (502 errors, CORS problems, HMR not working, connection refused, etc.), consult the comprehensive troubleshooting guide in [nginx/README.md](nginx/README.md)
+**For detailed troubleshooting**: When encountering specific issues (502 errors, CORS problems, connection refused, etc.), consult the comprehensive troubleshooting guide in [nginx/README.md](nginx/README.md)
 
 ## Repository Structure
 
@@ -335,7 +335,7 @@ Each microservice is maintained in its own repository:
 **Forbidden operations** (must be run by user on host):
 - `mkcert` (any certificate generation)
 - `openssl genrsa`, `openssl req -new`, `openssl x509 -req` (key/cert generation)
-- Any script that generates certificates (e.g., `setup-k8s-tls.sh`, `setup-local-https.sh`)
+- Any script that generates certificates (e.g., `setup-k8s-tls.sh`)
 
 **Allowed operations** (read-only):
 - `openssl x509 -text -noout` (inspect certificates)
@@ -347,11 +347,11 @@ When SSL issues occur, guide the user to run certificate scripts on their host m
 
 When working on this project:
 - Follow the resource-based routing pattern for new API endpoints
-- Ensure Docker configurations remain simple and maintainable
+- Ensure Kubernetes configurations remain simple and maintainable
 - Keep service independence - avoid tight coupling between services
 - Each microservice lives in its own repository
 - This orchestration repo coordinates deployment and environment setup
 - All repositories should be cloned side-by-side in a common parent directory for cross-repo documentation links to work
 - **Path Portability**: Never hardcode absolute paths like `/workspace`. The orchestration repo must work when cloned to any directory. Use relative paths or dynamic resolution (e.g., `config.main_dir` in Tiltfiles, `$(dirname "$0")` in shell scripts)
-- Ignore all files in docs/archive and docs/decisions.  Never change them, they are just for historical reference.
+- Ignore all files in docs/archive and docs/decisions. Never change them, they are just for historical reference.
 

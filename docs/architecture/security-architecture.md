@@ -21,6 +21,16 @@ This document outlines the security architecture for a financial data applicatio
 
 ## Architecture Overview
 
+### Request Flow
+
+**All browser traffic goes through Session Gateway.** Envoy handles SSL termination.
+
+```
+Browser → Envoy (:443) → Session Gateway (:8081) → Envoy → NGINX (:8080) → Services
+```
+
+### Component Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENT LAYER                              │
@@ -30,23 +40,31 @@ This document outlines the security architecture for a financial data applicatio
 └────────┬───────────────────────┬──────────────────────┬─────────┘
          │                       │                      │
          │ Session Cookie        │ JWT                  │ JWT
+         │ (HTTPS)               │ (HTTPS)              │ (HTTPS)
+         ▼                       ▼                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Envoy Gateway (Port 443, HTTPS)               │
+│                    • SSL Termination (all traffic)               │
+│                    • Routes app.* → Session Gateway              │
+│                    • Routes api.* → NGINX                        │
+└────────┬───────────────────────┬──────────────────────┬─────────┘
+         │ HTTP                  │ HTTP                 │ HTTP
+         ▼                       │                      │
+┌────────────────────────┐       │                      │
+│   Session Gateway      │       │                      │
+│   Port 8081 (HTTP)     │       │                      │
+│   • OAuth Flow Mgmt    │       │                      │
+│   • JWT in Redis       │       │                      │
+│   • Token Lifecycle    │       │                      │
+└────────┬───────────────┘       │                      │
          │                       │                      │
-┌────────▼───────────────────────┼──────────────────────┼─────────┐
-│     Session Gateway            │                      │         │
-│     (Spring Cloud Gateway)     │                      │         │
-│     Port 8081                  │                      │         │
-│     • OAuth Flow Management    │                      │         │
-│     • Session Management       │                      │         │
-│     • Token Lifecycle          │                      │         │
-└────────┬───────────────────────┴──────────────────────┴─────────┘
-         │ JWT in Authorization header
-         │
-┌────────▼─────────────────────────────────────────────────────────┐
-│                    NGINX API Gateway                             │
-│                    Port 443 (HTTPS)                              │
-│                    • SSL Termination                             │
+         └───────────────────────┴──────────────────────┘
+                        │ JWT in Authorization header
+                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    NGINX API Gateway (Port 8080, HTTP)           │
 │                    • Request Routing                             │
-│                    • JWT Validation                              │
+│                    • JWT Validation via Token Validation Service │
 │                    • Rate Limiting                               │
 │                    • Load Balancing                              │
 └────────┬─────────────────────────────────────────────────────────┘
@@ -56,7 +74,7 @@ This document outlines the security architecture for a financial data applicatio
          │        • Claims validation
          │
          └──────► Backend Microservices
-                  • Budget API (8082)
+                  • Transaction Service (8082)
                   • Currency Service (8084)
                   • Data-level authorization
 
@@ -110,13 +128,13 @@ The Session Gateway implements the Backend-for-Frontend (BFF) pattern specifical
 
 **Responsibilities:**
 - Route requests to appropriate microservices
-- Validate JWT signatures using cached public keys
-- Verify JWT claims (issuer, audience, expiration)
+- Validate JWT signatures via Token Validation Service
 - Rate limiting per user/client
 - Load balancing across service instances
-- SSL/TLS termination
 - WAF integration points
 - Circuit breaking and retry logic
+
+**Note:** SSL/TLS termination is handled by Envoy Gateway, not NGINX.
 
 **Technology:** NGINX (industry standard)
 
