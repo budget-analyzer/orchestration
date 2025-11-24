@@ -54,9 +54,15 @@ spec:
               key: port
         # Auth0 Configuration
         - name: AUTH0_ISSUER
-          value: "https://dev-gcz1r8453xzz0317.us.auth0.com/"
+          valueFrom:
+            secretKeyRef:
+              name: auth0-credentials
+              key: AUTH0_ISSUER_URI
         - name: AUTH0_AUDIENCE
-          value: "https://api.budgetanalyzer.org"
+          valueFrom:
+            secretKeyRef:
+              name: auth0-credentials
+              key: AUTH0_AUDIENCE
         resources:
           requests:
             memory: "256Mi"

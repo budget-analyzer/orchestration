@@ -103,7 +103,6 @@ def encode_secret_data(data):
     """Encode dictionary values to base64 for Kubernetes secrets."""
     encoded = {}
     for k, v in data.items():
-        # Base64 encode the value
         encoded[k] = str(local('echo -n "' + v + '" | base64 -w0', quiet=True)).strip()
     return encoded
 
@@ -172,14 +171,13 @@ data:
 '''))
 
 # Auth0 credentials for Session Gateway
-# CLIENT_ID, CLIENT_SECRET, ISSUER_URI loaded from .env file via dotenv()
-# AUDIENCE and LOGOUT_RETURN_TO are hardcoded - users must use these exact values
+# All values loaded from .env file via dotenv()
 auth0_data = encode_secret_data({
     'AUTH0_CLIENT_ID': os.getenv('AUTH0_CLIENT_ID', ''),
     'AUTH0_CLIENT_SECRET': os.getenv('AUTH0_CLIENT_SECRET', ''),
     'AUTH0_ISSUER_URI': os.getenv('AUTH0_ISSUER_URI', ''),
-    'AUTH0_AUDIENCE': 'https://api.budgetanalyzer.org',
-    'AUTH0_LOGOUT_RETURN_TO': 'https://app.budgetanalyzer.localhost',
+    'AUTH0_AUDIENCE': os.getenv('AUTH0_AUDIENCE', 'https://api.budgetanalyzer.org'),
+    'AUTH0_LOGOUT_RETURN_TO': os.getenv('AUTH0_LOGOUT_RETURN_TO', 'https://app.budgetanalyzer.localhost'),
 })
 
 k8s_yaml(blob('''
@@ -195,6 +193,22 @@ data:
   AUTH0_ISSUER_URI: ''' + auth0_data['AUTH0_ISSUER_URI'] + '''
   AUTH0_AUDIENCE: ''' + auth0_data['AUTH0_AUDIENCE'] + '''
   AUTH0_LOGOUT_RETURN_TO: ''' + auth0_data['AUTH0_LOGOUT_RETURN_TO'] + '''
+'''))
+
+# FRED API credentials for Currency Service
+fred_data = encode_secret_data({
+    'api-key': os.getenv('FRED_API_KEY', ''),
+})
+
+k8s_yaml(blob('''
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fred-api-credentials
+  namespace: ''' + DEFAULT_NAMESPACE + '''
+type: Opaque
+data:
+  api-key: ''' + fred_data['api-key'] + '''
 '''))
 
 # ============================================================================
@@ -266,7 +280,6 @@ EXPOSE ''' + str(port) + '''
 ''',
         entrypoint=[
             'java',
-            '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005',
             '-jar',
             '/app/app.jar'
         ],
@@ -347,7 +360,6 @@ EXPOSE 8081
 ''',
     entrypoint=[
         'java',
-        '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005',
         '-jar',
         '/app/app.jar'
     ],
@@ -583,15 +595,3 @@ local_resource(
     auto_init=False
 )
 
-# Kind image loader (for manual reloads)
-local_resource(
-    'load-images-to-kind',
-    cmd='''
-        for img in transaction-service currency-service permission-service token-validation-service session-gateway budget-analyzer-web; do
-            kind load docker-image $img:latest 2>/dev/null || true
-        done
-    ''',
-    labels=['setup'],
-    trigger_mode=TRIGGER_MODE_MANUAL,
-    auto_init=False
-)
