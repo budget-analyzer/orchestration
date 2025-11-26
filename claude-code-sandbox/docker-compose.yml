@@ -7,8 +7,7 @@ services:
         USERNAME: vscode
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
-        DOCKER_GID: ${DOCKER_GID:-999}
-    
+
     volumes:
       # Mount dev directory as workspace (read/write)
       - ../../:/workspace:cached
@@ -19,20 +18,10 @@ services:
       # Persistent storage for Claude Code credentials
       - claude-anthropic:/home/vscode/.anthropic
 
-      # Mount Docker socket for Testcontainers (docker-outside-of-docker pattern)
-      #- /var/run/docker.sock:/var/run/docker.sock
-    
     # Use host network for simplicity
     network_mode: host
     extra_hosts:
       - "host.docker.internal:host-gateway"  # Map to Docker host IP
-
-    # Environment variables for Testcontainers
-    environment:
-      # Required for Docker Desktop compatibility (allows containers to reach host)
-      - TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
-      - TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal
-      - TESTCONTAINERS_REUSE_ENABLE=true
 
     # Keep container running
     command: sleep infinity
