@@ -20,7 +20,7 @@ services:
       - claude-anthropic:/home/vscode/.anthropic
 
       # Mount Docker socket for Testcontainers (docker-outside-of-docker pattern)
-      - /var/run/docker.sock:/var/run/docker.sock
+      #- /var/run/docker.sock:/var/run/docker.sock
     
     # Use host network for simplicity
     network_mode: host
