@@ -17,6 +17,9 @@ REPOS=(
     "session-gateway"
     "token-validation-service"
     "permission-service"
+    "architecture-conversations"
+    "checkstyle-config"
+    "claude-discovery"
 )
 
 # Colors for output

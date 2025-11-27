@@ -213,6 +213,7 @@ All repositories should be cloned side-by-side in a common parent directory:
 ```
 /workspace/
 ├── .github/                    # Organization-level GitHub config (templates, profile README)
+├── workspace/                  # Devcontainer entry point (clone this first)
 ├── orchestration/              # This repo - deployment coordination
 ├── session-gateway/            # BFF service
 ├── token-validation-service/   # JWT validation service
@@ -221,7 +222,9 @@ All repositories should be cloned side-by-side in a common parent directory:
 ├── permission-service/         # Permission management
 ├── budget-analyzer-web/        # React frontend
 ├── service-common/             # Shared Java library
-└── checkstyle-config/          # Shared checkstyle rules
+├── checkstyle-config/          # Shared checkstyle rules
+├── architecture-conversations/ # Architectural discourse and patterns
+└── claude-discovery/           # Experimental discovery tool
 ```
 
 **Note**: The `.github` directory at workspace root is the [organization-level .github repository](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file) containing default issue/PR templates for all repos.
