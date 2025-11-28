@@ -85,14 +85,7 @@ fi
 print_success "Docker daemon is running"
 
 # =============================================================================
-# Step 2: Clone service repositories
-# =============================================================================
-print_step "Cloning service repositories..."
-
-"$SCRIPT_DIR/scripts/clone-repos.sh"
-
-# =============================================================================
-# Step 3: Create Kind cluster
+# Step 2: Create Kind cluster
 # =============================================================================
 print_step "Setting up Kind cluster..."
 
@@ -114,7 +107,7 @@ fi
 kubectl config use-context kind-kind &>/dev/null || true
 
 # =============================================================================
-# Step 4: Configure DNS
+# Step 3: Configure DNS
 # =============================================================================
 print_step "Checking DNS configuration..."
 
@@ -137,7 +130,7 @@ else
 fi
 
 # =============================================================================
-# Step 5: Install Gateway API and Envoy Gateway
+# Step 4: Install Gateway API and Envoy Gateway
 # =============================================================================
 print_step "Setting up Gateway API and Envoy Gateway..."
 
@@ -162,14 +155,14 @@ else
 fi
 
 # =============================================================================
-# Step 6: Generate TLS certificates
+# Step 5: Generate TLS certificates
 # =============================================================================
 print_step "Setting up TLS certificates..."
 
 "$SCRIPT_DIR/scripts/dev/setup-k8s-tls.sh"
 
 # =============================================================================
-# Step 7: Create .env file
+# Step 6: Create .env file
 # =============================================================================
 print_step "Setting up environment file..."
 

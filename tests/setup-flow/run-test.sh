@@ -86,7 +86,6 @@ if [ ${#MISSING_REPOS[@]} -gt 0 ]; then
     print_error "Missing repositories: ${MISSING_REPOS[*]}"
     echo ""
     echo "Please ensure all repos are cloned as siblings to orchestration."
-    echo "Run: ./scripts/clone-repos.sh"
     exit 1
 fi
 
